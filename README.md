@@ -23,5 +23,12 @@ do adapted hack: https://github.com/palantir/gradle-graal/issues/239#issuecommen
     => wait until bug on mac resolved!
     see graalvm-swt-native-image-master which is modified for graal-java11
 
+Test download source and compiled jar from https://repo1.maven.org/maven2/org/eclipse/platform/org.eclipse.swt.cocoa.macosx.x86_64/3.114.0/
+    (the only two big files)
+    unpack with unarchiver in firefox
+    see build.gradle.kts!
+    => doesn't work. can't find shared libs?
+
+
 
 ```

@@ -23,7 +23,7 @@ class BrowserShell(display: Display, url: String) {
     }
 }
 
-fun main() {
+fun runit() {
     Device.DEBUG = true
     Display.setAppName("washboard-swt")
 //    val display = Display.getDefault()
@@ -81,4 +81,8 @@ fun main() {
         if (!display.readAndDispatch()) display.sleep()
     }
     display.dispose()
+}
+
+fun main() {
+    runit()
 }
