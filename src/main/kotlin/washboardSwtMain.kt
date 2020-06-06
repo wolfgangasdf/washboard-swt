@@ -1,13 +1,13 @@
 import org.eclipse.swt.SWT
 import org.eclipse.swt.browser.Browser
-import org.eclipse.swt.custom.SashForm
 import org.eclipse.swt.graphics.Device
 import org.eclipse.swt.graphics.Point
+import org.eclipse.swt.internal.cocoa.NSDictionary
+import org.eclipse.swt.internal.cocoa.NSMutableDictionary
+import org.eclipse.swt.internal.cocoa.NSString
+import org.eclipse.swt.internal.cocoa.id
 import org.eclipse.swt.layout.FillLayout
-import org.eclipse.swt.layout.GridData
-import org.eclipse.swt.layout.GridLayout
 import org.eclipse.swt.widgets.*
-
 
 // https://www.eclipse.org/articles/Article-SWT-browser-widget/DocumentationViewer.java
 
@@ -24,13 +24,55 @@ class BrowserShell(display: Display, url: String) {
 }
 
 fun main() {
+    var sss = ""
+    val bundle = org.eclipse.swt.internal.cocoa.NSBundle.mainBundle()
+    val infodict = bundle.infoDictionary()
+//    i.setValue(, NSString.stringWith("NSAppTransportSecurity"))
+    sss += "keysn=" + infodict.count() + "\n"
+
+//    val xxx = NSString.stringWith("nnnname")
+//    infodict.setValue(xxx, NSString.stringWith("CFBundleName"))
+
+    // THIS should change it like for python here: https://stackoverflow.com/questions/34613902/how-to-disable-app-transport-security-for-a-script
+    // TODO it doesn't work, possibly because I make the infodict larger, need to extend it somehow?
+    val yyy = NSDictionary.dictionaryWithObject(NSString.stringWith("YES"), NSString.stringWith("NSAllowsArbitraryLoads"))
+    infodict.setValue(yyy, NSString.stringWith("NSAppTransportSecurity"))
+
+
+    sss += "keysn=" + infodict.count() + "\n"
+
+    val zz = bundle.objectForInfoDictionaryKey(NSString.stringWith("NSAppTransportSecurity"))
+    val dd = NSDictionary(zz.id)
+    val ee = dd.objectEnumerator()
+    var oo = ee.nextObject()
+    while (oo != null) {
+        sss += "   oo: ${NSString(oo).string}\n"
+        oo = ee.nextObject()
+    }
+
+    val allk = infodict.allKeys()
+    for (iii in 0 until infodict.count()) {
+        val o = allk.objectAtIndex(iii)
+        sss += "n: ${NSString(o.id).string}\n"
+        sss += " v: ${NSString(infodict.objectForKey(allk.objectAtIndex(iii))).string}\n"
+
+    }
+
+//    println("CCC: " + infodict.valueForKey(NSString.stringWith("NSAppTransportSecurity")))
+//    val o = infodict.objectForKey(NSString.stringWith("NSAppTransportSecurity"))
+//    println("CCC: " + o.toString())
+
     Device.DEBUG = true
     Display.setAppName("washboard-swt")
 //    val display = Display.getDefault()
     val display = Display()
     Display.setAppName("washboard-swt") // need twice https://stackoverflow.com/a/45088431
     val shell = Shell(display)
-    shell.text = "WashboardSwt"
+    shell.text = "WashboardSwt: " + infodict.valueForKey(NSString.stringWith("NSAppTransportSecurity"))
+    val t = Text(shell, SWT.BORDER)
+    shell.layout = FillLayout()
+    t.text = sss
+
 //    shell.text = "SWT Browser - Documentation Viewer"
 //    shell.layout = GridLayout()
 //    val compTools = Composite(shell, SWT.NONE)
@@ -58,7 +100,8 @@ fun main() {
 //    val browser = Browser(form, SWT.NONE)
 //
 
-    shell.layout = FillLayout()
+
+//    shell.layout = FillLayout()
     val browser = Browser(shell, SWT.NONE)
     browser.url = "http://nix:8083/mobile"
 //    browser.url = "https://quphotonics.org"
