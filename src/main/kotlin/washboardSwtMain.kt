@@ -3,7 +3,6 @@ import mu.KLogger
 import mu.KotlinLogging
 import org.eclipse.swt.SWT
 import org.eclipse.swt.browser.Browser
-import org.eclipse.swt.events.SelectionListener
 import org.eclipse.swt.graphics.Device
 import org.eclipse.swt.graphics.Image
 import org.eclipse.swt.graphics.Point
@@ -21,11 +20,10 @@ import kotlin.system.exitProcess
 
 private lateinit var logger: KLogger
 
-// https://www.eclipse.org/articles/Article-SWT-browser-widget/DocumentationViewer.java
 
 
-class Widget(val type: WidgetType, val url: String = "", var x: Double = 100.0, var y: Double = 100.0,
-             var wx: Double = 250.0, var wy: Double = 250.0, var updateIntervalMins: Double = 30.0,
+class Widget(val type: WidgetType, var url: String = "", var x: Int = 100, var y: Int = 100,
+             var wx: Int = 250, var wy: Int = 250, var updateIntervalMins: Int = 30,
              var enableClicks: Boolean = false) {
     var bs: BrowserShell? = null
     var lastupdatems: Long = 0
@@ -34,6 +32,7 @@ class Widget(val type: WidgetType, val url: String = "", var x: Double = 100.0, 
 
 class BrowserShell(private val w: Widget) {
     val shell = Shell(display)
+    // https://www.eclipse.org/articles/Article-SWT-browser-widget/DocumentationViewer.java
     private val browser = Browser(shell, SWT.NONE)
 
     fun loadWebviewContent() {
@@ -51,12 +50,62 @@ class BrowserShell(private val w: Widget) {
 
     init {
         shell.layout = FillLayout()
-        shell.location = Point(w.x.toInt(), w.y.toInt())
-        shell.size = Point(w.wx.toInt(), w.wy.toInt())
+        shell.location = Point(w.x, w.y)
+        shell.size = Point(w.wx, w.wy)
         shell.open()
         loadWebviewContent()
     }
 }
+
+class ShellEditWidget(w: Widget) {
+    private var turl: Text? = null
+    init {
+        val shell = Shell(display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
+            text = "Edit widget"
+            layout = RowLayout(SWT.VERTICAL)
+            setSize(200, 250)
+        }
+        when(w.type) {
+            WidgetType.LOCAL -> {
+                Label(shell, SWT.NONE).apply { text = "Local widgets reside in a folder below ${StoreSettings.getLocalWidgetPath()}, and should at least contain index.html" }
+                turl = Text(shell, SWT.NONE).apply { text = w.url }
+                wButton(shell, "Choose...") {
+                    FileDialog(shell, SWT.OPEN).apply {
+                        text = "Select widget folder"
+                        fileName = StoreSettings.getLocalWidgetPath()
+                    }.open()?.let {
+                        turl!!.text = it
+                    }
+                }
+            }
+            WidgetType.WEB -> {
+                Label(shell, SWT.NONE).apply { text = "URL:" }
+                turl = Text(shell, SWT.NONE).apply { text = w.url }
+            }
+            WidgetType.DASHBOARD -> {
+                error("not impl")
+            }
+        }
+        Label(shell, SWT.NONE).apply { text = "Update interval (minutes)" }
+        val tupdi = Text(shell, SWT.NONE).apply { text = w.updateIntervalMins.toString() }
+        Label(shell, SWT.NONE).apply { text = "Enable mouse clicks (otherwise open URL)" }
+        val bclic = Button(shell, SWT.CHECK).apply { selection = w.enableClicks }
+        wButton(shell, "Update") {
+            WashboardApp.unshowWidget(w)
+            w.url = turl!!.text
+            w.updateIntervalMins = tupdi.text.toIntOrNull()?:w.updateIntervalMins
+            w.enableClicks = bclic.selection
+            Settings.widgethistory.add(w)
+            WashboardApp.showWidget(w)
+            Settings.saveSettings()
+            shell.close()
+        }
+        wButton(shell, "Cancel") { shell.close() }
+        shell.pack()
+        shell.open()
+    }
+}
+
 
 class ShellHistory {
     init {
@@ -70,24 +119,18 @@ class ShellHistory {
             logger.debug("hist: $it")
             lv.add(it.toString())
         }
-        Button(shell, SWT.PUSH).apply {
-            text = "Add widget"
-            addSelectionListener( SelectionListener.widgetSelectedAdapter{
-                if (lv.selectionIndex > -1) {
-                    WashboardApp.showWidget(Settings.widgethistory[lv.selectionIndex])
-                    Settings.saveSettings()
-                }
-            })
+        wButton(shell, "Add widget") {
+            if (lv.selectionIndex > -1) {
+                WashboardApp.showWidget(Settings.widgethistory[lv.selectionIndex])
+                Settings.saveSettings()
+            }
         }
 
-        Button(shell, SWT.PUSH).apply {
-            text = "Delete"
-            addSelectionListener( SelectionListener.widgetSelectedAdapter{
-                if (lv.selectionIndex > -1) {
-                    Settings.widgethistory.removeAt(lv.selectionIndex)
-                    Settings.saveSettings()
-                }
-            })
+        wButton(shell, "Delete") {
+            if (lv.selectionIndex > -1) {
+                Settings.widgethistory.removeAt(lv.selectionIndex)
+                Settings.saveSettings()
+            }
         }
 
         shell.pack()
@@ -97,6 +140,7 @@ class ShellHistory {
 
 object WashboardApp {
     private lateinit var revealTimer: Timer
+    private var focusLostCount = 0 // -1: hidden
 
     private fun beforeQuit() {
         revealTimer.cancel()
@@ -112,7 +156,7 @@ object WashboardApp {
     }
 
     private fun showApp() {
-        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true) // TODO ugly
+        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
         val now = System.currentTimeMillis()
         Settings.widgets.forEach { w ->
             if (now - w.lastupdatems > w.updateIntervalMins*60*1000) {
@@ -120,10 +164,12 @@ object WashboardApp {
                 w.bs!!.loadWebviewContent()
             }
         }
+        focusLostCount = 0
     }
 
     private fun hideApp() {
-        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().hide(null) // TODO ugly
+        focusLostCount = -1
+        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().hide(null)
     }
 
     private fun quitApp() {
@@ -132,7 +178,7 @@ object WashboardApp {
     }
 
     lateinit var display: Display
-    lateinit var mainShell: Shell
+    private lateinit var mainShell: Shell
 
     fun unshowWidget(w: Widget) {
         w.bs?.shell?.close()
@@ -152,7 +198,7 @@ object WashboardApp {
     fun launchApp() {
         Device.DEBUG = true
         Display.setAppName("washboard-swt")
-        display = Display.getDefault() // this shows dock icon, no matter what i do! TODO
+        display = Display.getDefault() // this shows dock icon, no matter what i do!
         Display.setAppName("washboard-swt") // need twice https://stackoverflow.com/a/45088431
 
         // hide dock icon related to https://stackoverflow.com/questions/2832961/is-it-possible-to-hide-the-dock-icon-programmatically?rq=1
@@ -174,26 +220,27 @@ object WashboardApp {
         val trayItem = TrayItem(tray, SWT.NONE)
         trayItem.toolTipText = "Washboard"
         trayItem.image = Image(display, 16, 16)
-        val menu = Menu(mainShell, SWT.POP_UP)
-        MenuItem(menu, SWT.PUSH).apply {
-            text = "Show"
-            addListener(SWT.Selection) { showApp() }
+        val menu = Menu(mainShell, SWT.PUSH)
+        wMenuItem(menu, "About washboard") { Helpers.openURL("https://quphotonics.org") }
+        wMenuItem(menu, "Show") { showApp() }
+        wMenuItem(menu, "Hide") { hideApp() }
+        wMenuItem(menu, "Add web widget") {
+            val w = Widget(WidgetType.WEB)
+            ShellEditWidget(w)
         }
-        MenuItem(menu, SWT.PUSH).apply {
-            text = "Hide"
-            addListener(SWT.Selection) { hideApp() }
-        }
-        MenuItem(menu, SWT.PUSH).apply {
-            text = "History..."
-            addListener(SWT.Selection) {
-                ShellHistory()
+        wMenuItem(menu, "Add local widget") { ShellEditWidget(Widget(WidgetType.LOCAL)) }
+        wMenuItem(menu, "Edit widget") {
+            Settings.widgets.forEach {
+                logger.debug("$it: ${it.bs!!.shell.isFocusControl}")
             }
         }
-        MenuItem(menu, SWT.PUSH).apply {
-            text = "Exit"
-            addListener(SWT.Selection) { quitApp() }
+        wMenuItem(menu, "History") { ShellHistory() }
+        wMenuItem(menu, "Settings folder") { Helpers.revealFile(StoreSettings.getSettingFile()) }
+        wMenuItem(menu, "Quit") { quitApp() }
+        trayItem.addListener(SWT.MenuDetect) {
+            showApp()
+            menu.isVisible = true
         }
-        trayItem.addListener(SWT.MenuDetect) { menu.isVisible = true }
 
         mainShell.pack()
         mainShell.open()
@@ -201,6 +248,16 @@ object WashboardApp {
         revealTimer = fixedRateTimer("reveal timer", period = 200) {
             if (StoreSettings.checkRevealFile()) {
                 reveal()
+            }
+            if (focusLostCount > -1) {
+                display.syncExec {
+                    if (display.focusControl == null) {
+                        focusLostCount += 1
+                        if (focusLostCount > 3) {
+                            hideApp()
+                        }
+                    } else focusLostCount = 0
+                }
             }
         }
 
@@ -219,7 +276,7 @@ object WashboardApp {
 
 fun main() {
 
-    // disable App transport security ATS
+    // disable App transport security ATS to allow http (needed also for LAN if hostname used, ip ok)
     val ats = org.eclipse.swt.internal.cocoa.NSDictionary.dictionaryWithObject(
             org.eclipse.swt.internal.cocoa.NSNumber.numberWithBool(true),
             org.eclipse.swt.internal.cocoa.NSString.stringWith("NSAllowsArbitraryLoads"))

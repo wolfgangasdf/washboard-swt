@@ -71,11 +71,11 @@ object Settings {
     private fun loadWidget(props: Map<String, String>, prefix: String): Widget {
         return Widget(WidgetType.fromInt(props.getOrDefault("$prefix.type", "0").toInt()),
                 props.getOrDefault("$prefix.url", ""),
-                props.getOrDefault("$prefix.x", "").toDouble(),
-                props.getOrDefault("$prefix.y", "").toDouble(),
-                props.getOrDefault("$prefix.wx", "").toDouble(),
-                props.getOrDefault("$prefix.wy", "").toDouble(),
-                props.getOrDefault("$prefix.updateInterval", "30.0").toDouble(),
+                props.getOrDefault("$prefix.x", "").toDouble().toInt(), // TODO remove todouble
+                props.getOrDefault("$prefix.y", "").toDouble().toInt(),
+                props.getOrDefault("$prefix.wx", "").toDouble().toInt(),
+                props.getOrDefault("$prefix.wy", "").toDouble().toInt(),
+                props.getOrDefault("$prefix.updateInterval", "30").toDouble().toInt(),
                 props.getOrDefault("$prefix.enableClicks", "false").toBoolean())
     }
 
