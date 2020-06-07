@@ -5,6 +5,15 @@ works BUT: can't load http !!!!!!!!!!!!!!
     setting NSAllowsArbitraryLoads in Info.plist has no effect
     most likely because the runtime image jlink .app runs a script which runs java...
     nearly nothing about that in the internet :-(
+
+    solution:
+        val ats = org.eclipse.swt.internal.cocoa.NSDictionary.dictionaryWithObject(
+                org.eclipse.swt.internal.cocoa.NSNumber.numberWithBool(true),
+                org.eclipse.swt.internal.cocoa.NSString.stringWith("NSAllowsArbitraryLoads"))
+        org.eclipse.swt.internal.cocoa.NSBundle.mainBundle().infoDictionary().setValue(
+                ats, org.eclipse.swt.internal.cocoa.NSString.stringWith("NSAppTransportSecurity"))
+
+
     but strange, java is run with bash.exec which replaces process...
     option make wmp https:
         swtbrowser works with https://self-signed.badssl.com (after accepting cert in safari)

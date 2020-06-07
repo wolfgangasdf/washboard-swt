@@ -22,7 +22,7 @@ repositories {
 application {
     // Define the main class for the application.
     mainClassName = "WashboardSwtMainKt"
-    applicationDefaultJvmArgs = listOf("-XstartOnFirstThread")
+    applicationDefaultJvmArgs = listOf("-XstartOnFirstThread")//), "-Djava.awt.headless=true")// TODO , "-Xdock:hidden")
 }
 
 dependencies {
@@ -120,6 +120,8 @@ open class CrossPackage : DefaultTask() {
                             <key>NSAllowsArbitraryLoads</key>
                             <true/>
                           </dict>
+                          <key>LSUIElement</key>
+                            <true/>
                          </dict>
                         </plist>
                     """.trimIndent())
