@@ -155,6 +155,10 @@ object WashboardApp {
         display = Display.getDefault() // this shows dock icon, no matter what i do! TODO
         Display.setAppName("washboard-swt") // need twice https://stackoverflow.com/a/45088431
 
+        // hide dock icon related to https://stackoverflow.com/questions/2832961/is-it-possible-to-hide-the-dock-icon-programmatically?rq=1
+        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().setActivationPolicy(1)
+        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
+
         mainShell = Shell(display)
         mainShell.text = "WashboardSwt"
         mainShell.layout = FillLayout()
@@ -201,7 +205,6 @@ object WashboardApp {
         }
 
         showAllWidgets()
-//        mainShell.forceActive() // get focus
 
         while (!mainShell.isDisposed) {
             if (!display.readAndDispatch()) display.sleep()
@@ -215,8 +218,6 @@ object WashboardApp {
 
 
 fun main() {
-    // hide dock icon https://stackoverflow.com/questions/24312260/javafx-application-hide-osx-dock-icon
-    System.setProperty("apple.awt.UIElement", "true") // TODO doesn't work
 
     // disable App transport security ATS
     val ats = org.eclipse.swt.internal.cocoa.NSDictionary.dictionaryWithObject(
@@ -224,11 +225,6 @@ fun main() {
             org.eclipse.swt.internal.cocoa.NSString.stringWith("NSAllowsArbitraryLoads"))
     org.eclipse.swt.internal.cocoa.NSBundle.mainBundle().infoDictionary().setValue(
             ats, org.eclipse.swt.internal.cocoa.NSString.stringWith("NSAppTransportSecurity"))
-
-    // hide tray icon // TODO doesn't work
-//    org.eclipse.swt.internal.cocoa.NSBundle.mainBundle().infoDictionary().setValue(
-//            org.eclipse.swt.internal.cocoa.NSNumber.numberWithBool(true),
-//            org.eclipse.swt.internal.cocoa.NSString.stringWith("LSUIElement"))
 
     val oldOut: PrintStream = System.out
     val oldErr: PrintStream = System.err
@@ -263,7 +259,6 @@ fun main() {
     System.setProperty(org.slf4j.simple.SimpleLogger.DATE_TIME_FORMAT_KEY, "yyyy-MM-dd HH:mm:ss:SSS")
     System.setProperty(org.slf4j.simple.SimpleLogger.LOG_FILE_KEY, "System.out") // and use intellij "grep console" plugin
     // System.setProperty("javax.net.debug", "all")
-//    System.setProperty("prism.verbose", "true")
     logger = KotlinLogging.logger {} // after set properties!
 
     logger.error("error")
