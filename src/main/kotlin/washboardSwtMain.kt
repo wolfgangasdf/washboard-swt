@@ -14,9 +14,14 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.io.PrintStream
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
+
 
 private lateinit var logger: KLogger
 
@@ -139,26 +144,22 @@ class ShellHistory {
 }
 
 object WashboardApp {
-    private lateinit var revealTimer: Timer
+    private lateinit var focusTimer: Timer
     private var focusLostCount = 0 // -1: hidden
+    private var serverSocket: ServerSocket? = null
 
     private fun beforeQuit() {
-        revealTimer.cancel()
+        focusTimer.cancel()
         Settings.saveSettings()
+        serverSocket?.close()
         StoreSettings.releaseLock()
-    }
-
-    private fun reveal() {
-        logger.debug("reveal app!")
-        display.asyncExec {
-            showApp()
-        }
     }
 
     private fun showApp() {
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
         val now = System.currentTimeMillis()
         Settings.widgets.forEach { w ->
+            w.bs!!.shell.setActive() // also bring all widgets in foreground, above command works not always! TODO unreliable possibly just add timerthread to try later again?
             if (now - w.lastupdatems > w.updateIntervalMins*60*1000) {
                 logger.info("reloading widget $w")
                 w.bs!!.loadWebviewContent()
@@ -219,7 +220,7 @@ object WashboardApp {
         assert (tray != null) { "can't get tray!!" }
         val trayItem = TrayItem(tray, SWT.NONE)
         trayItem.toolTipText = "Washboard"
-        trayItem.image = Image(display, 16, 16)
+        trayItem.image = Image(display, javaClass.getResource("icon16x16.png").openStream())
         val menu = Menu(mainShell, SWT.PUSH)
         wMenuItem(menu, "About washboard") { Helpers.openURL("https://quphotonics.org") }
         wMenuItem(menu, "Show") { showApp() }
@@ -245,10 +246,7 @@ object WashboardApp {
         mainShell.pack()
         mainShell.open()
 
-        revealTimer = fixedRateTimer("reveal timer", period = 200) {
-            if (StoreSettings.checkRevealFile()) {
-                reveal()
-            }
+        focusTimer = fixedRateTimer("focus timer", period = 200) {
             if (focusLostCount > -1) {
                 display.syncExec {
                     if (display.focusControl == null) {
@@ -262,6 +260,21 @@ object WashboardApp {
         }
 
         showAllWidgets()
+
+        serverSocket = ServerSocket(0)
+        logger.info("listening on port " + serverSocket?.localPort)
+        StoreSettings.lockFile.writeText(serverSocket!!.localPort.toString())
+        thread { // reveal thread
+            while (true) {
+                serverSocket!!.accept()
+                logger.info("Connection to socket, reveal!")
+                display.syncExec {
+                    showApp()
+                }
+            }
+        }
+
+
 
         while (!mainShell.isDisposed) {
             if (!display.readAndDispatch()) display.sleep()
@@ -286,18 +299,18 @@ fun main() {
     val oldOut: PrintStream = System.out
     val oldErr: PrintStream = System.err
     var logps: FileOutputStream? = null
-    var lockRevealFilesDidExist = false
 
     // do before logfile is created
     if (!StoreSettings.getLock()) {
         println("Lock file exists...")
-        if (StoreSettings.checkRevealFile(true)) {
-            println("... but also reveal file, normal startup!")
-            lockRevealFilesDidExist = true
-        } else {
-            println("... revealing running instance!")
-            StoreSettings.setRevealFile()
+        val revealport = StoreSettings.lockFile.readText().toInt()
+        //reveal if socket listens, start normal if not.
+        val socket = Socket(InetAddress.getByName(null), revealport) // ping other washboard process
+        if (socket.isConnected) { // true also if closed now
+            println("Revealed running washboard on port $revealport!")
             exitProcess(0)
+        } else {
+            println("... but nobody listening on port $revealport, normal startup!")
         }
     }
 
@@ -325,7 +338,7 @@ fun main() {
     logger.trace("trace")
 
 
-    logger.info("starting Washboard! lockRevealFilesDidExist=$lockRevealFilesDidExist")
+    logger.info("starting Washboard!")
 
     WashboardApp.launchApp()
 }

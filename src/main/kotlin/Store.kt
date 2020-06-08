@@ -3,7 +3,9 @@ import mu.KotlinLogging
 import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
+import java.net.ServerSocket
 import java.util.*
+
 
 private val logger = KotlinLogging.logger {}
 
@@ -24,7 +26,7 @@ object StoreSettings {
     fun getSettingFile(): File = File("$settpath/washboard.properties")
     fun getLocalWidgetPath(): String = "$settpath/widgets"
     fun getDashboardWidgetPath(): String = "$settpath/dashboardwidgets"
-    private val lockFile = File("$settpath/lockfile.lock")
+    val lockFile = File("$settpath/lockfile.lock")
     private val revealFile = File("$settpath/reveal")
 
     fun getLock(): Boolean = lockFile.createNewFile()
