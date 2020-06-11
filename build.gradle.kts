@@ -22,7 +22,7 @@ repositories {
 application {
     // Define the main class for the application.
     mainClassName = "WashboardSwtMainKt"
-    applicationDefaultJvmArgs = listOf("-XstartOnFirstThread")//), "-Djava.awt.headless=true")// TODO , "-Xdock:hidden")
+    applicationDefaultJvmArgs = listOf("-XstartOnFirstThread")
 }
 
 dependencies {

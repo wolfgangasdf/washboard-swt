@@ -3,6 +3,8 @@ import mu.KLogger
 import mu.KotlinLogging
 import org.eclipse.swt.SWT
 import org.eclipse.swt.browser.Browser
+import org.eclipse.swt.events.MouseEvent
+import org.eclipse.swt.events.MouseListener
 import org.eclipse.swt.graphics.Device
 import org.eclipse.swt.graphics.Image
 import org.eclipse.swt.graphics.Point
@@ -14,10 +16,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.io.PrintStream
-import java.net.InetAddress
-import java.net.ServerSocket
-import java.net.Socket
-import java.net.SocketException
+import java.net.*
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
 import kotlin.concurrent.schedule
@@ -43,9 +42,18 @@ class BrowserShell(private val w: Widget) {
     val browser = Browser(shell, SWT.NONE)
 
     fun loadWebviewContent() {
-        println("loadwvc: wbs=${w.bs} b=${w.bs?.browser}")
         when(w.type) {
-            WidgetType.WEB -> w.bs?.browser?.url = w.url
+            WidgetType.WEB -> {
+                // test connection
+                try {
+                    val urlConnect = URL(w.url).openConnection() as HttpURLConnection
+                    urlConnect.connect()
+                    urlConnect.disconnect()
+                    w.bs?.browser?.url = w.url
+                } catch (e: Exception) {
+                    logger.debug("loadwvc $w test connection: exception $e")
+                }
+            }
             WidgetType.LOCAL -> {
                 val f = File("${AppSettings.getLocalWidgetPath()}/${w.url}/index.html")
                 logger.debug("[$w] url: ${f.toURI()}")
@@ -56,19 +64,27 @@ class BrowserShell(private val w: Widget) {
         w.lastupdatems = System.currentTimeMillis()
     }
 
+    fun update() {
+        browser.url = w.url
+    }
+
     init {
         shell.layout = FillLayout()
         shell.location = Point(w.x, w.y)
         shell.size = Point(w.wx, w.wy)
-        shell.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) { // TODO lambda doesn't work here
+        @Suppress("ObjectLiteralToLambda") // lambda doesn't work here
+        shell.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) {
             logger.info("Removing widget $w from widgets!")
             Settings.widgets.remove(w)
             Settings.saveSettings()
         }})
-        browser.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) { // TODO lambda doesn't work here
-            logger.debug("browser close $w")
-        }})
-
+        browser.addMouseListener(object: MouseListener {
+            override fun mouseDoubleClick(e: MouseEvent?) {}
+            override fun mouseDown(e: MouseEvent?) {
+                if (!w.enableClicks) Helpers.openURL(w.url)
+            }
+            override fun mouseUp(e: MouseEvent?) {}
+        })
         shell.open()
         loadWebviewContent()
     }
@@ -108,12 +124,12 @@ class ShellEditWidget(w: Widget) {
         Label(shell, SWT.NONE).apply { text = "Enable mouse clicks (otherwise open URL)" }
         val bclic = Button(shell, SWT.CHECK).apply { selection = w.enableClicks }
         wButton(shell, "Update") {
-            WashboardApp.unshowWidget(w)
             w.url = turl!!.text
             w.updateIntervalMins = tupdi.text.toIntOrNull()?:w.updateIntervalMins
             w.enableClicks = bclic.selection
+            w.bs?.update()
             Settings.widgethistory.add(w)
-            WashboardApp.showWidget(w) // TODO browser is disposed... no time to draw??
+            WashboardApp.showWidget(w)
             Settings.saveSettings()
             shell.close()
         }
@@ -146,6 +162,7 @@ class ShellHistory {
         wButton(shell, "Delete") {
             if (lv.selectionIndex > -1) {
                 Settings.widgethistory.removeAt(lv.selectionIndex)
+                lv.remove(lv.selectionIndex)
                 Settings.saveSettings()
             }
         }
@@ -157,6 +174,7 @@ class ShellHistory {
 
 object WashboardApp {
     private var focusTimer: Timer? = null
+    private var appShown = true
     private var serverSocket: ServerSocket? = null
     private var revealThread: Thread? = null
 
@@ -172,7 +190,7 @@ object WashboardApp {
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
         val now = System.currentTimeMillis()
         Settings.widgets.forEach { w ->
-            w.bs!!.shell.setActive() // also bring all widgets in foreground, above command works not always! TODO unreliable possibly just add timerthread to try later again?
+            w.bs!!.shell.setActive()
             if (now - w.lastupdatems > w.updateIntervalMins * 60 * 1000) {
                 logger.info("reloading widget $w")
                 w.bs!!.loadWebviewContent()
@@ -189,11 +207,13 @@ object WashboardApp {
                 display.syncExec { showApp(true) }
             }
         }
+        appShown = true
     }
 
     private fun hideApp() {
         focusTimer?.cancel()
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().hide(null)
+        appShown = false
     }
 
     private fun quitApp() {
@@ -203,11 +223,6 @@ object WashboardApp {
 
     lateinit var display: Display
     private lateinit var mainShell: Shell
-
-    fun unshowWidget(w: Widget) {
-        w.bs?.shell?.close()
-        Settings.widgets.remove(w)
-    }
 
     fun showWidget(w: Widget, addToSettings: Boolean = true) {
         w.bs = BrowserShell(w)
@@ -260,7 +275,7 @@ object WashboardApp {
         wMenuItem(menu, "Settings folder") { Helpers.revealFile(AppSettings.getSettingFile()) }
         wMenuItem(menu, "Quit") { quitApp() }
         trayItem.addListener(SWT.MenuDetect) {
-            showApp()
+            if (!appShown) showApp()
             menu.isVisible = true
         }
 
@@ -287,7 +302,8 @@ object WashboardApp {
             }
         }
 
-        display.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) { // TODO lambda doesn't work here
+        @Suppress("ObjectLiteralToLambda") // lambda doesn't work here
+        display.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) {
             logger.debug("display close!!!")
             quitApp()
         }})
