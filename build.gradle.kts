@@ -42,8 +42,8 @@ dependencies {
 runtime {
     options.set(listOf("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages"))
     // first row: suggestModules
-    modules.set(listOf("java.desktop")) //"java.logging", "java.prefs", "java.xml", "jdk.unsupported", "jdk.jfr", "jdk.jsobject", "jdk.xml.dom",
-//            "jdk.crypto.cryptoki","jdk.crypto.ec")) // needed?
+    modules.set(listOf("java.desktop",
+            "jdk.crypto.cryptoki","jdk.crypto.ec")) // for https URL connection test
 
     if (cPlatforms.contains("mac")) targetPlatform("mac", System.getenv("JDK_MAC_HOME"))
     if (cPlatforms.contains("win")) targetPlatform("win", System.getenv("JDK_WIN_HOME"))
