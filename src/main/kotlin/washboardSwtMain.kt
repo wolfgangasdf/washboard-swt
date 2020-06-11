@@ -17,8 +17,10 @@ import java.io.PrintStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
+import kotlin.concurrent.schedule
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
@@ -38,13 +40,14 @@ class Widget(val type: WidgetType, var url: String = "", var x: Int = 100, var y
 class BrowserShell(private val w: Widget) {
     val shell = Shell(display)
     // https://www.eclipse.org/articles/Article-SWT-browser-widget/DocumentationViewer.java
-    private val browser = Browser(shell, SWT.NONE)
+    val browser = Browser(shell, SWT.NONE)
 
     fun loadWebviewContent() {
+        println("loadwvc: wbs=${w.bs} b=${w.bs?.browser}")
         when(w.type) {
             WidgetType.WEB -> w.bs?.browser?.url = w.url
             WidgetType.LOCAL -> {
-                val f = File("${StoreSettings.getLocalWidgetPath()}/${w.url}/index.html")
+                val f = File("${AppSettings.getLocalWidgetPath()}/${w.url}/index.html")
                 logger.debug("[$w] url: ${f.toURI()}")
                 w.bs?.browser?.url = f.toURI().toString()
             }
@@ -57,6 +60,15 @@ class BrowserShell(private val w: Widget) {
         shell.layout = FillLayout()
         shell.location = Point(w.x, w.y)
         shell.size = Point(w.wx, w.wy)
+        shell.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) { // TODO lambda doesn't work here
+            logger.info("Removing widget $w from widgets!")
+            Settings.widgets.remove(w)
+            Settings.saveSettings()
+        }})
+        browser.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) { // TODO lambda doesn't work here
+            logger.debug("browser close $w")
+        }})
+
         shell.open()
         loadWebviewContent()
     }
@@ -72,12 +84,12 @@ class ShellEditWidget(w: Widget) {
         }
         when(w.type) {
             WidgetType.LOCAL -> {
-                Label(shell, SWT.NONE).apply { text = "Local widgets reside in a folder below ${StoreSettings.getLocalWidgetPath()}, and should at least contain index.html" }
+                Label(shell, SWT.NONE).apply { text = "Local widgets reside in a folder below ${AppSettings.getLocalWidgetPath()}, and should at least contain index.html" }
                 turl = Text(shell, SWT.NONE).apply { text = w.url }
                 wButton(shell, "Choose...") {
                     FileDialog(shell, SWT.OPEN).apply {
                         text = "Select widget folder"
-                        fileName = StoreSettings.getLocalWidgetPath()
+                        fileName = AppSettings.getLocalWidgetPath()
                     }.open()?.let {
                         turl!!.text = it
                     }
@@ -101,7 +113,7 @@ class ShellEditWidget(w: Widget) {
             w.updateIntervalMins = tupdi.text.toIntOrNull()?:w.updateIntervalMins
             w.enableClicks = bclic.selection
             Settings.widgethistory.add(w)
-            WashboardApp.showWidget(w)
+            WashboardApp.showWidget(w) // TODO browser is disposed... no time to draw??
             Settings.saveSettings()
             shell.close()
         }
@@ -144,32 +156,43 @@ class ShellHistory {
 }
 
 object WashboardApp {
-    private lateinit var focusTimer: Timer
-    private var focusLostCount = 0 // -1: hidden
+    private var focusTimer: Timer? = null
     private var serverSocket: ServerSocket? = null
+    private var revealThread: Thread? = null
 
     private fun beforeQuit() {
-        focusTimer.cancel()
+        serverSocket!!.close()
+        focusTimer?.cancel()
         Settings.saveSettings()
         serverSocket?.close()
-        StoreSettings.releaseLock()
+        AppSettings.releaseLock()
     }
 
-    private fun showApp() {
+    private fun showApp(secondcall: Boolean = false) {
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
         val now = System.currentTimeMillis()
         Settings.widgets.forEach { w ->
             w.bs!!.shell.setActive() // also bring all widgets in foreground, above command works not always! TODO unreliable possibly just add timerthread to try later again?
-            if (now - w.lastupdatems > w.updateIntervalMins*60*1000) {
+            if (now - w.lastupdatems > w.updateIntervalMins * 60 * 1000) {
                 logger.info("reloading widget $w")
                 w.bs!!.loadWebviewContent()
             }
         }
-        focusLostCount = 0
+        if (!secondcall) {
+            focusTimer = fixedRateTimer("focus timer", initialDelay = 500, period = 200) {
+                display.syncExec {
+                    if (display.focusControl == null) hideApp()
+                }
+            }
+            // ugly workaround that not all windows are always on top
+            Timer().schedule(100) {
+                display.syncExec { showApp(true) }
+            }
+        }
     }
 
     private fun hideApp() {
-        focusLostCount = -1
+        focusTimer?.cancel()
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().hide(null)
     }
 
@@ -231,12 +254,10 @@ object WashboardApp {
         }
         wMenuItem(menu, "Add local widget") { ShellEditWidget(Widget(WidgetType.LOCAL)) }
         wMenuItem(menu, "Edit widget") {
-            Settings.widgets.forEach {
-                logger.debug("$it: ${it.bs!!.shell.isFocusControl}")
-            }
+            Settings.widgets.find { it.bs!!.browser.isFocusControl }?.also { ShellEditWidget(it) }
         }
         wMenuItem(menu, "History") { ShellHistory() }
-        wMenuItem(menu, "Settings folder") { Helpers.revealFile(StoreSettings.getSettingFile()) }
+        wMenuItem(menu, "Settings folder") { Helpers.revealFile(AppSettings.getSettingFile()) }
         wMenuItem(menu, "Quit") { quitApp() }
         trayItem.addListener(SWT.MenuDetect) {
             showApp()
@@ -246,43 +267,37 @@ object WashboardApp {
         mainShell.pack()
         mainShell.open()
 
-        focusTimer = fixedRateTimer("focus timer", period = 200) {
-            if (focusLostCount > -1) {
-                display.syncExec {
-                    if (display.focusControl == null) {
-                        focusLostCount += 1
-                        if (focusLostCount > 3) {
-                            hideApp()
-                        }
-                    } else focusLostCount = 0
-                }
-            }
-        }
-
         showAllWidgets()
+        showApp() // call here, starts focus timer
 
         serverSocket = ServerSocket(0)
         logger.info("listening on port " + serverSocket?.localPort)
-        StoreSettings.lockFile.writeText(serverSocket!!.localPort.toString())
-        thread { // reveal thread
-            while (true) {
-                serverSocket!!.accept()
-                logger.info("Connection to socket, reveal!")
-                display.syncExec {
-                    showApp()
+        AppSettings.lockFile.writeText(serverSocket!!.localPort.toString())
+        revealThread = thread { // reveal thread
+            while (!serverSocket!!.isClosed) {
+                try {
+                    serverSocket!!.accept()
+                    logger.info("Connection to socket, reveal!")
+                    display.syncExec {
+                        showApp()
+                    }
+                } catch (e: SocketException) {
+                    logger.debug("serversocket got exception: $e")
                 }
             }
         }
 
+        display.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) { // TODO lambda doesn't work here
+            logger.debug("display close!!!")
+            quitApp()
+        }})
 
-
+        // run gui
         while (!mainShell.isDisposed) {
             if (!display.readAndDispatch()) display.sleep()
         }
 
-        beforeQuit()
-        display.dispose()
-
+        quitApp()
     }
 }
 
@@ -301,16 +316,20 @@ fun main() {
     var logps: FileOutputStream? = null
 
     // do before logfile is created
-    if (!StoreSettings.getLock()) {
+    if (!AppSettings.getLock()) {
         println("Lock file exists...")
-        val revealport = StoreSettings.lockFile.readText().toInt()
         //reveal if socket listens, start normal if not.
-        val socket = Socket(InetAddress.getByName(null), revealport) // ping other washboard process
-        if (socket.isConnected) { // true also if closed now
-            println("Revealed running washboard on port $revealport!")
-            exitProcess(0)
-        } else {
-            println("... but nobody listening on port $revealport, normal startup!")
+        try {
+            val revealport = AppSettings.lockFile.readText().toInt()
+            val socket = Socket(InetAddress.getByName(null), revealport) // ping other washboard process
+            if (socket.isConnected) { // true also if closed now
+                println("Revealed running washboard on port $revealport!")
+                exitProcess(0)
+            } else {
+                println("... but nobody listening on port $revealport, normal startup!")
+            }
+        } catch(e: Exception) {
+            println("... but got exception $e, normal startup!")
         }
     }
 
@@ -340,5 +359,6 @@ fun main() {
 
     logger.info("starting Washboard!")
 
+    Settings.loadSettings()
     WashboardApp.launchApp()
 }

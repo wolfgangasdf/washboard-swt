@@ -3,13 +3,12 @@ import mu.KotlinLogging
 import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
-import java.net.ServerSocket
 import java.util.*
 
 
 private val logger = KotlinLogging.logger {}
 
-object StoreSettings {
+object AppSettings {
     private var settpath = ""
 
     init {
@@ -17,7 +16,7 @@ object StoreSettings {
             Helpers.isMac() -> System.getProperty("user.home") + "/Library/Application Support/WashboardApp" // TODO remove App
             Helpers.isLinux() -> System.getProperty("user.home") + "/.washboard"
             Helpers.isWin() -> Helpers.toJavaPathSeparator(System.getenv("APPDATA")) + "\\Washboard"
-            else -> throw Exception("operating system not found")
+            else -> error(Exception("operating system not found"))
         }
         File(getLocalWidgetPath()).let { if (!it.isDirectory) it.mkdirs() }
         File(getDashboardWidgetPath()).let { if (!it.isDirectory) it.mkdirs() }
@@ -26,25 +25,15 @@ object StoreSettings {
     fun getSettingFile(): File = File("$settpath/washboard.properties")
     fun getLocalWidgetPath(): String = "$settpath/widgets"
     fun getDashboardWidgetPath(): String = "$settpath/dashboardwidgets"
+
     val lockFile = File("$settpath/lockfile.lock")
-    private val revealFile = File("$settpath/reveal")
-
     fun getLock(): Boolean = lockFile.createNewFile()
-
     fun releaseLock(): Boolean = lockFile.delete()
-
-    fun checkRevealFile(deleteIfExisted: Boolean = true): Boolean {
-        val res = revealFile.exists()
-        if (deleteIfExisted && res) revealFile.delete()
-        return res
-    }
-
-    fun setRevealFile() { revealFile.createNewFile() }
 }
 
 ///////////////////////// settings
 
-class MainSettings(var hideTimeout: Int = 50)
+class MainSettings(var hideTimeout: Int = 50) // TODO don't need?
 
 enum class WidgetType(val i: Int) {
     WEB(0),
@@ -60,13 +49,14 @@ object Settings {
     val settings = MainSettings()
     val widgethistory = arrayListOf<Widget>()
 
-    private fun saveWidget(props: Properties, prefix: String, w: Widget) {
+    private fun saveWidget(props: Properties, prefix: String, w: Widget, isHistory: Boolean) {
+        logger.debug("save widget [$prefix]: $w")
         props["$prefix.type"] = w.type.i.toString()
         props["$prefix.url"] = w.url
-        props["$prefix.x"] = w.bs!!.shell.location.x.toString()
-        props["$prefix.y"] = w.bs!!.shell.location.y.toString()
-        props["$prefix.wx"] = w.bs!!.shell.size.x.toString()
-        props["$prefix.wy"] = w.bs!!.shell.size.y.toString()
+        props["$prefix.x"] = (if (isHistory) w.x else w.bs!!.shell.location.x).toString()
+        props["$prefix.y"] = (if (isHistory) w.y else w.bs!!.shell.location.y).toString()
+        props["$prefix.wx"] = (if (isHistory) w.wx else w.bs!!.shell.size.x).toString()
+        props["$prefix.wy"] = (if (isHistory) w.wy else w.bs!!.shell.size.y).toString()
         props["$prefix.updateInterval"] = w.updateIntervalMins.toString()
         props["$prefix.enableClicks"] = w.enableClicks.toString()
     }
@@ -82,31 +72,28 @@ object Settings {
     }
 
     fun saveSettings() {
-        // TODO
-        logger.error("savesett disabled !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        return
         val props = Properties()
         props["settingsversion"] = "1"
         props["wb.hideTimeout"] = settings.hideTimeout.toString()
         props["widgets"] = widgets.size.toString()
-        widgets.forEachIndexed { idx, w -> saveWidget(props, "w.$idx", w) }
+        widgets.forEachIndexed { idx, w -> saveWidget(props, "w.$idx", w, false) }
         props["widgethistorysize"] = widgethistory.size.toString()
-        widgethistory.forEachIndexed { idx, w -> saveWidget(props, "wh.$idx", w) }
-        StoreSettings.getSettingFile().parentFile.mkdirs()
-        val fw = FileWriter(StoreSettings.getSettingFile())
+        widgethistory.forEachIndexed { idx, w -> saveWidget(props, "wh.$idx", w, true) }
+        AppSettings.getSettingFile().parentFile.mkdirs()
+        val fw = FileWriter(AppSettings.getSettingFile())
         props.store(fw, null)
         logger.info("settings saved!")
     }
 
-    private fun loadSettings() {
-        logger.info("load settings ${StoreSettings.getSettingFile()}")
+    fun loadSettings() {
+        logger.info("load settings ${AppSettings.getSettingFile()}")
         widgets.clear()
-        if (StoreSettings.getSettingFile().exists()) {
+        if (AppSettings.getSettingFile().exists()) {
             val propsx = Properties()
-            val fr = FileReader(StoreSettings.getSettingFile())
+            val fr = FileReader(AppSettings.getSettingFile())
             propsx.load(fr)
             val props = propsx.map { (k, v) -> k.toString() to v.toString() }.toMap()
-            if (props["settingsversion"] != "1") throw Exception("wrong settingsversion!")
+            if (props["settingsversion"] != "1") error(Exception("wrong settingsversion!"))
             try {
                 settings.hideTimeout = props.getOrDefault("wb.hideTimeout", "50").toInt()
                 for (idx in 0 until props.getOrDefault("widgets", "0").toInt()) {
@@ -119,14 +106,10 @@ object Settings {
             } catch (e: Exception) {
                 logger.error("error loading settings: ${e.message}")
                 e.printStackTrace()
+                error("Error loading settings")
             }
             logger.info("settings loaded!")
         }
     }
-
-    init {
-        loadSettings()
-    }
-
 }
 
