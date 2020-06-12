@@ -31,7 +31,12 @@ object Helpers {
         if (Desktop.isDesktopSupported() && url != "") {
             val desktop = Desktop.getDesktop()
             if (desktop.isSupported(Desktop.Action.BROWSE)) {
-                desktop.browse(URI(url))
+                try {
+                    desktop.browse(URI(url))
+                } catch (e: Exception) {
+                    println("ignoring exception openurl: $e")
+                    e.printStackTrace()
+                }
             }
         }
     }
