@@ -24,6 +24,8 @@ object AppSettings {
 
     fun getSettingFile(): File = File("$settpath/washboard.properties")
     fun getLocalWidgetPath(): String = "$settpath/widgets"
+    fun removePrefixPath(path: String, prefixPath: String): String =
+            File(path).absolutePath.removePrefix(File(prefixPath).absolutePath + "/").toString()
     fun getDashboardWidgetPath(): String = "$settpath/dashboardwidgets"
 
     val lockFile = File("$settpath/lockfile.lock")

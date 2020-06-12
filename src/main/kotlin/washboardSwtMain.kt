@@ -1,4 +1,6 @@
 import WashboardApp.display
+import WashboardApp.startFocusTimer
+import WashboardApp.stopFocusTimer
 import mu.KLogger
 import mu.KotlinLogging
 import org.eclipse.swt.SWT
@@ -95,20 +97,22 @@ class ShellEditWidget(w: Widget) {
     init {
         val shell = Shell(display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
             text = "Edit widget"
-            layout = RowLayout(SWT.VERTICAL)
+            layout = RowLayout(SWT.VERTICAL).apply { this.fill = true }
             setSize(200, 250)
         }
         when(w.type) {
             WidgetType.LOCAL -> {
-                Label(shell, SWT.NONE).apply { text = "Local widgets reside in a folder below ${AppSettings.getLocalWidgetPath()}, and should at least contain index.html" }
+                Label(shell, SWT.NONE).apply { text = "Local widgets reside in a folder below\n${AppSettings.getLocalWidgetPath()},\nand should at least contain index.html" }
                 turl = Text(shell, SWT.NONE).apply { text = w.url }
                 wButton(shell, "Choose...") {
-                    FileDialog(shell, SWT.OPEN).apply {
+                    stopFocusTimer()
+                    DirectoryDialog(shell, SWT.OPEN).apply {
                         text = "Select widget folder"
-                        fileName = AppSettings.getLocalWidgetPath()
+                        filterPath = AppSettings.getLocalWidgetPath()
                     }.open()?.let {
-                        turl!!.text = it
+                        turl!!.text = AppSettings.removePrefixPath(it, AppSettings.getLocalWidgetPath())
                     }
+                    startFocusTimer()
                 }
             }
             WidgetType.WEB -> {
@@ -144,7 +148,7 @@ class ShellHistory {
     init {
         val shell = Shell(display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
             text = "Washboard History"
-            layout = RowLayout(SWT.VERTICAL)
+            layout = RowLayout(SWT.VERTICAL).apply { fill = true }
             setSize(200, 250)
         }
         val lv = List(shell, SWT.H_SCROLL or SWT.V_SCROLL)
@@ -186,6 +190,19 @@ object WashboardApp {
         AppSettings.releaseLock()
     }
 
+    fun startFocusTimer() {
+        stopFocusTimer()
+        focusTimer = fixedRateTimer("focus timer", initialDelay = 500, period = 200) {
+            display.syncExec {
+                if (display.focusControl == null) hideApp()
+            }
+        }
+    }
+
+    fun stopFocusTimer() {
+        focusTimer?.cancel()
+    }
+
     private fun showApp(secondcall: Boolean = false) {
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
         val now = System.currentTimeMillis()
@@ -197,11 +214,7 @@ object WashboardApp {
             }
         }
         if (!secondcall) {
-            focusTimer = fixedRateTimer("focus timer", initialDelay = 500, period = 200) {
-                display.syncExec {
-                    if (display.focusControl == null) hideApp()
-                }
-            }
+            startFocusTimer()
             // ugly workaround that not all windows are always on top
             Timer().schedule(100) {
                 display.syncExec { showApp(true) }
@@ -211,7 +224,7 @@ object WashboardApp {
     }
 
     private fun hideApp() {
-        focusTimer?.cancel()
+        stopFocusTimer()
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().hide(null)
         appShown = false
     }
