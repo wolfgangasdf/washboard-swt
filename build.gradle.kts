@@ -26,11 +26,11 @@ application {
 }
 
 dependencies {
-//    implementation("de.brudaswen.kotlinx.coroutines:kotlinx-coroutines-swt:1.0.0")
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
     implementation("io.github.microutils:kotlin-logging:1.7.9")
     implementation("org.slf4j:slf4j-simple:1.8.0-beta4") // no colors, everything stderr
+    implementation("com.github.gimlet2:kottpd:0.1.4")
 
     implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.114.0") {
         isTransitive = false

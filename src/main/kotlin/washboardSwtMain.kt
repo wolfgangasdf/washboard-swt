@@ -14,10 +14,10 @@ import org.eclipse.swt.layout.FillLayout
 import org.eclipse.swt.layout.RowLayout
 import org.eclipse.swt.widgets.*
 import org.eclipse.swt.widgets.List
-import java.io.File
-import java.io.FileOutputStream
-import java.io.OutputStream
-import java.io.PrintStream
+import org.kottpd.HttpRequest
+import org.kottpd.HttpResponse
+import org.kottpd.Server
+import java.io.*
 import java.net.*
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
@@ -52,6 +52,7 @@ class BrowserShell(private val w: Widget) {
                     urlConnect.connect()
                     urlConnect.disconnect()
                     w.bs?.browser?.url = w.url
+                    w.lastupdatems = System.currentTimeMillis()
                 } catch (e: Exception) {
                     logger.debug("loadwvc $w test connection: exception $e")
                 }
@@ -60,10 +61,10 @@ class BrowserShell(private val w: Widget) {
                 val f = File("${AppSettings.getLocalWidgetPath()}/${w.url}/index.html")
                 logger.debug("[$w] url: ${f.toURI()}")
                 w.bs?.browser?.url = f.toURI().toString()
+                w.lastupdatems = System.currentTimeMillis()
             }
             WidgetType.DASHBOARD -> error("not impl")
         }
-        w.lastupdatems = System.currentTimeMillis()
     }
 
     fun update() {
@@ -295,9 +296,6 @@ object WashboardApp {
         mainShell.pack()
         mainShell.open()
 
-        showAllWidgets()
-        showApp() // call here, starts focus timer
-
         serverSocket = ServerSocket(0)
         logger.info("listening on port " + serverSocket?.localPort)
         AppSettings.lockFile.writeText(serverSocket!!.localPort.toString())
@@ -321,6 +319,9 @@ object WashboardApp {
             quitApp()
         }})
 
+        showAllWidgets()
+        showApp() // call here, starts focus timer
+
         // run gui
         while (!mainShell.isDisposed) {
             if (!display.readAndDispatch()) display.sleep()
@@ -328,6 +329,51 @@ object WashboardApp {
 
         quitApp()
     }
+
+
+    private fun myStaticFiles(server: Server, abspath: String) {
+        fun mywalk(abspath: String, prefix: String, func: (File, HttpRequest, HttpResponse) -> Unit) {
+            File(abspath).walkTopDown().forEach { file ->
+                if (!file.isDirectory) {
+                    val rp = file.path.substring(abspath.length)
+                    var doit = true
+                    var url = prefix + rp
+                    // only use en locale, must be served from /
+                    if (rp.contains("en.lproj/")) {
+                        url = prefix + rp.substring("en.lproj/".length)
+                    } else if (rp.contains(".lproj/")) {
+                        doit = false
+                    }
+                    if (doit) {
+                        server.get(url) { req, res -> func(file, req, res) }
+                        logger.debug("started get for $url")
+                    }
+                }
+            }
+        }
+        // add for widget files
+        val x = "SystemLibraryWidgetResources"
+        mywalk(abspath, "") { file, req, res ->
+            val s = file.readText().replace("file:///System/Library/WidgetResources/", "/$x/")
+            res.send(s)
+        }
+
+        // add apple support files
+        mywalk(this.javaClass.getResource(x).file, "/$x") { file, req, res ->
+            val s = file.readText().replace("file:///System/Library/WidgetResources/", "/$x/")
+            res.send(s)
+        }
+    }
+
+    // TODO web server test
+    fun wstest() {
+        val server = Server(9876)
+        myStaticFiles(server, "/Users/wolle/Library/Application Support/Washboard/dashboardwidgets/Sol.wdgt")
+        server.start()
+        Thread.sleep(123456789)
+        server.threadPool.shutdownNow() // TODO does this stop?
+    }
+
 }
 
 
@@ -390,4 +436,5 @@ fun main() {
 
     Settings.loadSettings()
     WashboardApp.launchApp()
+//    WashboardApp.wstest() // TODO
 }
