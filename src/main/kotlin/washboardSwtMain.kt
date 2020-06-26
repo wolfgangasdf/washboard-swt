@@ -1,6 +1,7 @@
 import WashboardApp.display
 import WashboardApp.startFocusTimer
 import WashboardApp.stopFocusTimer
+import com.tulskiy.keymaster.common.Provider
 import mu.KLogger
 import mu.KotlinLogging
 import org.eclipse.swt.SWT
@@ -20,6 +21,7 @@ import org.kottpd.Server
 import java.io.*
 import java.net.*
 import java.util.*
+import javax.swing.KeyStroke
 import kotlin.concurrent.fixedRateTimer
 import kotlin.concurrent.schedule
 import kotlin.concurrent.thread
@@ -322,10 +324,25 @@ object WashboardApp {
         showAllWidgets()
         showApp() // call here, starts focus timer
 
+        //    WashboardApp.wstest() // TODO
+
+        // TODO keystroke / mouse listener test
+        val provider = Provider.getCurrentProvider(false)
+        provider.register(KeyStroke.getKeyStroke("F12")) { // TODO make config, and reload this!
+            logger.info("jkeymaster: $it")
+            display.syncExec {
+                showApp()
+            }
+        }
+
         // run gui
         while (!mainShell.isDisposed) {
             if (!display.readAndDispatch()) display.sleep()
         }
+
+        // TODO
+        provider.reset()
+        provider.stop()
 
         quitApp()
     }
@@ -436,5 +453,4 @@ fun main() {
 
     Settings.loadSettings()
     WashboardApp.launchApp()
-//    WashboardApp.wstest() // TODO
 }

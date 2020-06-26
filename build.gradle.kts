@@ -12,11 +12,12 @@ plugins {
     kotlin("jvm") version "1.3.72"
     application
     id("com.github.ben-manes.versions") version "0.28.0"
-    id("org.beryx.runtime") version "1.8.4"
+    id("org.beryx.runtime") version "1.9.1"
 }
 
 repositories {
     jcenter()
+    maven("https://oss.sonatype.org/content/repositories/snapshots") // jkeymaster
 }
 
 application {
@@ -28,11 +29,11 @@ application {
 dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
-    implementation("io.github.microutils:kotlin-logging:1.7.9")
+    implementation("io.github.microutils:kotlin-logging:1.8.0.1")
     implementation("org.slf4j:slf4j-simple:1.8.0-beta4") // no colors, everything stderr
-    implementation("com.github.gimlet2:kottpd:0.1.4")
-
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.114.0") {
+    implementation("com.github.gimlet2:kottpd:0.1.4") // for dashboard widgets web server
+    implementation("com.github.tulskiy:jkeymaster:1.3-SNAPSHOT") // for global key
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.114.100") {
         isTransitive = false
     }
 
@@ -115,13 +116,6 @@ open class CrossPackage : DefaultTask() {
                           <string>Copyright (C) 2019</string>
                           <key>NSHighResolutionCapable</key>
                           <string>true</string>
-                          <key>NSAppTransportSecurity</key>
-                          <dict>
-                            <key>NSAllowsArbitraryLoads</key>
-                            <true/>
-                          </dict>
-                          <key>LSUIElement</key>
-                            <true/>
                          </dict>
                         </plist>
                     """.trimIndent())
@@ -161,8 +155,8 @@ tasks.withType<KotlinCompile> {
 task("dist") {
     dependsOn("crosspackage")
     doLast {
-//        println("Deleting build/[image,jre,install]")
-//        project.delete(project.runtime.imageDir.get(), project.runtime.jreDir.get(), "${project.buildDir.path}/install")
+        println("Deleting build/[image,jre,install]")
+        project.delete(project.runtime.imageDir.get(), project.runtime.jreDir.get(), "${project.buildDir.path}/install")
         println("Created zips in build/crosspackage")
     }
 }
