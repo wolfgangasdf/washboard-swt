@@ -1,6 +1,3 @@
-import WashboardApp.display
-import WashboardApp.startFocusTimer
-import WashboardApp.stopFocusTimer
 import com.tulskiy.keymaster.common.Provider
 import mu.KLogger
 import mu.KotlinLogging
@@ -41,7 +38,7 @@ class Widget(val type: WidgetType, var url: String = "", var x: Int = 100, var y
 }
 
 class BrowserShell(private val w: Widget) {
-    val shell = Shell(display)
+    val shell = Shell(WashboardApp.display)
     // https://www.eclipse.org/articles/Article-SWT-browser-widget/DocumentationViewer.java
     val browser = Browser(shell, SWT.NONE)
 
@@ -98,7 +95,7 @@ class BrowserShell(private val w: Widget) {
 class ShellEditWidget(w: Widget) {
     private var turl: Text? = null
     init {
-        val shell = Shell(display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
+        val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
             text = "Edit widget"
             layout = RowLayout(SWT.VERTICAL).apply { this.fill = true }
             setSize(200, 250)
@@ -108,14 +105,14 @@ class ShellEditWidget(w: Widget) {
                 Label(shell, SWT.NONE).apply { text = "Local widgets reside in a folder below\n${AppSettings.getLocalWidgetPath()},\nand should at least contain index.html" }
                 turl = Text(shell, SWT.NONE).apply { text = w.url }
                 wButton(shell, "Choose...") {
-                    stopFocusTimer()
+                    WashboardApp.stopFocusTimer()
                     DirectoryDialog(shell, SWT.OPEN).apply {
                         text = "Select widget folder"
                         filterPath = AppSettings.getLocalWidgetPath()
                     }.open()?.let {
                         turl!!.text = AppSettings.removePrefixPath(it, AppSettings.getLocalWidgetPath())
                     }
-                    startFocusTimer()
+                    WashboardApp.startFocusTimer()
                 }
             }
             WidgetType.WEB -> {
@@ -146,10 +143,31 @@ class ShellEditWidget(w: Widget) {
     }
 }
 
+class ShellSettings {
+    init {
+        val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
+            text = "Settings"
+            layout = RowLayout(SWT.VERTICAL).apply { this.fill = true }
+            setSize(200, 250)
+        }
+        Label(shell, SWT.NONE).apply { text = "Global keyboard shortcut (KeyStroke like \"shift F12\")" }
+        val tgsc = Text(shell, SWT.NONE).apply { text = Settings.settings.globalshortcut }
+        wButton(shell, "Save") {
+            Settings.settings.globalshortcut = tgsc.text
+            WashboardApp.updateGlobalshortcut()
+            Settings.saveSettings()
+            shell.close()
+        }
+        wButton(shell, "Cancel") { shell.close() }
+        shell.pack()
+        shell.open()
+    }
+}
+
 
 class ShellHistory {
     init {
-        val shell = Shell(display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
+        val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
             text = "Washboard History"
             layout = RowLayout(SWT.VERTICAL).apply { fill = true }
             setSize(200, 250)
@@ -184,8 +202,11 @@ object WashboardApp {
     private var appShown = true
     private var serverSocket: ServerSocket? = null
     private var revealThread: Thread? = null
+    private val keymaster = Provider.getCurrentProvider(false) // global keyboard shortcut listener
 
     private fun beforeQuit() {
+        keymaster.reset()
+        keymaster.stop()
         serverSocket!!.close()
         focusTimer?.cancel()
         Settings.saveSettings()
@@ -206,23 +227,12 @@ object WashboardApp {
         focusTimer?.cancel()
     }
 
-    private fun showApp(secondcall: Boolean = false) {
+    private fun showApp() {
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
-        val now = System.currentTimeMillis()
-        Settings.widgets.forEach { w ->
-            w.bs!!.shell.setActive()
-            if (now - w.lastupdatems > w.updateIntervalMins * 60 * 1000) {
-                logger.info("reloading widget $w")
-                w.bs!!.loadWebviewContent()
-            }
+        Timer().schedule(100) { // ugly workaround that not all windows are always on top
+            display.syncExec { org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true) }
         }
-        if (!secondcall) {
-            startFocusTimer()
-            // ugly workaround that not all windows are always on top
-            Timer().schedule(100) {
-                display.syncExec { showApp(true) }
-            }
-        }
+        startFocusTimer()
         appShown = true
     }
 
@@ -248,6 +258,17 @@ object WashboardApp {
 
     private fun showAllWidgets() {
         Settings.widgets.forEach { showWidget(it, false) }
+    }
+
+    fun updateGlobalshortcut() {
+        keymaster.reset()
+        if (Settings.settings.globalshortcut.trim() != "") {
+            keymaster.register(KeyStroke.getKeyStroke(Settings.settings.globalshortcut)) {
+                display.syncExec {
+                    showApp()
+                }
+            }
+        }
     }
 
     fun launchApp() {
@@ -288,6 +309,7 @@ object WashboardApp {
             Settings.widgets.find { it.bs!!.browser.isFocusControl }?.also { ShellEditWidget(it) }
         }
         wMenuItem(menu, "History") { ShellHistory() }
+        wMenuItem(menu, "Settings") { ShellSettings() }
         wMenuItem(menu, "Settings folder") { Helpers.revealFile(AppSettings.getSettingFile()) }
         wMenuItem(menu, "Quit") { quitApp() }
         trayItem.addListener(SWT.MenuDetect) {
@@ -305,12 +327,12 @@ object WashboardApp {
             while (!serverSocket!!.isClosed) {
                 try {
                     serverSocket!!.accept()
-                    logger.info("Connection to socket, reveal!")
+                    logger.info("revealthread: Connection to socket, reveal!")
                     display.syncExec {
                         showApp()
                     }
                 } catch (e: SocketException) {
-                    logger.debug("serversocket got exception: $e")
+                    logger.debug("revealthread: serversocket got exception: $e")
                 }
             }
         }
@@ -322,32 +344,20 @@ object WashboardApp {
         }})
 
         showAllWidgets()
+        updateGlobalshortcut()
         showApp() // call here, starts focus timer
 
-        //    WashboardApp.wstest() // TODO
-
-        // TODO keystroke / mouse listener test
-        val provider = Provider.getCurrentProvider(false)
-        provider.register(KeyStroke.getKeyStroke("F12")) { // TODO make config, and reload this!
-            logger.info("jkeymaster: $it")
-            display.syncExec {
-                showApp()
-            }
-        }
+        //    WashboardApp.wstest() // TODO test dashboardwidgets
 
         // run gui
         while (!mainShell.isDisposed) {
             if (!display.readAndDispatch()) display.sleep()
         }
 
-        // TODO
-        provider.reset()
-        provider.stop()
-
         quitApp()
     }
 
-
+    @Suppress("SameParameterValue")
     private fun myStaticFiles(server: Server, abspath: String) {
         fun mywalk(abspath: String, prefix: String, func: (File, HttpRequest, HttpResponse) -> Unit) {
             File(abspath).walkTopDown().forEach { file ->
@@ -370,22 +380,23 @@ object WashboardApp {
         }
         // add for widget files
         val x = "SystemLibraryWidgetResources"
-        mywalk(abspath, "") { file, req, res ->
+        mywalk(abspath, "") { file, _, res ->
             val s = file.readText().replace("file:///System/Library/WidgetResources/", "/$x/")
             res.send(s)
         }
 
         // add apple support files
-        mywalk(this.javaClass.getResource(x).file, "/$x") { file, req, res ->
+        mywalk(this.javaClass.getResource(x).file, "/$x") { file, _, res ->
             val s = file.readText().replace("file:///System/Library/WidgetResources/", "/$x/")
             res.send(s)
         }
     }
 
     // TODO web server test
+    @Suppress("unused")
     fun wstest() {
         val server = Server(9876)
-        myStaticFiles(server, "/Users/wolle/Library/Application Support/Washboard/dashboardwidgets/Sol.wdgt")
+        myStaticFiles(server, "${AppSettings.getDashboardWidgetPath()}/Sol.wdgt")
         server.start()
         Thread.sleep(123456789)
         server.threadPool.shutdownNow() // TODO does this stop?

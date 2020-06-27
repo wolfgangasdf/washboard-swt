@@ -25,7 +25,7 @@ object AppSettings {
     fun getSettingFile(): File = File("$settpath/washboard.properties")
     fun getLocalWidgetPath(): String = "$settpath/widgets"
     fun removePrefixPath(path: String, prefixPath: String): String =
-            File(path).absolutePath.removePrefix(File(prefixPath).absolutePath + "/").toString()
+            File(path).absolutePath.removePrefix(File(prefixPath).absolutePath + "/")
     fun getDashboardWidgetPath(): String = "$settpath/dashboardwidgets"
 
     val lockFile = File("$settpath/lockfile.lock")
@@ -35,7 +35,7 @@ object AppSettings {
 
 ///////////////////////// settings
 
-class MainSettings(var hideTimeout: Int = 50) // TODO don't need?
+class MainSettings(var globalshortcut: String = "")
 
 enum class WidgetType(val i: Int) {
     WEB(0),
@@ -76,7 +76,7 @@ object Settings {
     fun saveSettings() {
         val props = Properties()
         props["settingsversion"] = "1"
-        props["wb.hideTimeout"] = settings.hideTimeout.toString()
+        props["wb.globalshortcut"] = settings.globalshortcut
         props["widgets"] = widgets.size.toString()
         widgets.forEachIndexed { idx, w -> saveWidget(props, "w.$idx", w, false) }
         props["widgethistorysize"] = widgethistory.size.toString()
@@ -97,7 +97,7 @@ object Settings {
             val props = propsx.map { (k, v) -> k.toString() to v.toString() }.toMap()
             if (props["settingsversion"] != "1") error(Exception("wrong settingsversion!"))
             try {
-                settings.hideTimeout = props.getOrDefault("wb.hideTimeout", "50").toInt()
+                settings.globalshortcut = props.getOrDefault("wb.globalshortcut", "")
                 for (idx in 0 until props.getOrDefault("widgets", "0").toInt()) {
                     widgets += loadWidget(props, "w.$idx")
                     logger.debug("loaded widget ${widgets.last()}")
