@@ -3,6 +3,8 @@ import mu.KLogger
 import mu.KotlinLogging
 import org.eclipse.swt.SWT
 import org.eclipse.swt.browser.Browser
+import org.eclipse.swt.events.FocusEvent
+import org.eclipse.swt.events.FocusListener
 import org.eclipse.swt.events.MouseEvent
 import org.eclipse.swt.events.MouseListener
 import org.eclipse.swt.graphics.Device
@@ -80,6 +82,12 @@ class BrowserShell(private val w: Widget) {
             Settings.widgets.remove(w)
             Settings.saveSettings()
         }})
+        browser.addFocusListener(object: FocusListener {
+            override fun focusLost(e: FocusEvent?) {}
+            override fun focusGained(e: FocusEvent?) {
+                WashboardApp.lastActiveWidget = w
+            }
+        })
         browser.addMouseListener(object: MouseListener {
             override fun mouseDoubleClick(e: MouseEvent?) {}
             override fun mouseDown(e: MouseEvent?) {
@@ -203,6 +211,7 @@ object WashboardApp {
     private var serverSocket: ServerSocket? = null
     private var revealThread: Thread? = null
     private val keymaster = Provider.getCurrentProvider(false) // global keyboard shortcut listener
+    var lastActiveWidget: Widget? = null
 
     private fun beforeQuit() {
         keymaster.reset()
@@ -232,6 +241,15 @@ object WashboardApp {
         Timer().schedule(100) { // ugly workaround that not all windows are always on top
             display.syncExec { org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true) }
         }
+        val now = System.currentTimeMillis()
+        Settings.widgets.forEach { w ->
+            w.bs?.shell?.setActive() // only needed when revealed via socket
+            if (now - w.lastupdatems > w.updateIntervalMins * 60 * 1000) {
+                logger.info("reloading widget $w")
+                w.bs!!.loadWebviewContent()
+            }
+        }
+        lastActiveWidget?.bs?.shell?.setActive() // only needed when revealed via socket
         startFocusTimer()
         appShown = true
     }
@@ -347,7 +365,7 @@ object WashboardApp {
         updateGlobalshortcut()
         showApp() // call here, starts focus timer
 
-        //    WashboardApp.wstest() // TODO test dashboardwidgets
+//        wstest() // TODO test dashboardwidgets
 
         // run gui
         while (!mainShell.isDisposed) {
@@ -418,7 +436,7 @@ fun main() {
     val oldErr: PrintStream = System.err
     var logps: FileOutputStream? = null
 
-    // do before logfile is created
+    // do this before logfile is created (emptied)
     if (!AppSettings.getLock()) {
         println("Lock file exists...")
         //reveal if socket listens, start normal if not.

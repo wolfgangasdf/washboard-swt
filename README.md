@@ -19,11 +19,13 @@ not yet...
     `bin/webremotecontrol.bat` (Windows) or `bin/webremotecontrol` (Mac/Linux). It is not signed, google for "open unsigned mac/win".
 
 ## Notes
-  * On startup, it writes a lockfile which contains a port on which is listened, open it and washboard is revealed.
-If this lockfile is present while the app is launched, it reveals itself.
-  * To implement hot corners activation:
-    * mac: bettertouchtool has "Other" action "Move Mouse to Bottom Right Corner", then use "Execute Terminal Command", enter path to washboard executable.
+### Lockfile and reveal: 
+On startup, it writes a lockfile which contains a port on which is listens, open it and washboard is revealed.
+If this lockfile is present while the app is launched, it reveals the running instance.
 
+To implement hot corners activation:
+  * mac: bettertouchtool has "Other" action "Move Mouse to Bottom Right Corner", then use "Execute Terminal Command", enter this:<br>
+``` nc -z localhost `cat "/Users/<USER>/Library/Application Support/Washboard/lockfile.lock"` ```
 
 # How to develop, compile & package
 
