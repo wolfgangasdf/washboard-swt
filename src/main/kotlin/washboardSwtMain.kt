@@ -3,14 +3,15 @@ import mu.KLogger
 import mu.KotlinLogging
 import org.eclipse.swt.SWT
 import org.eclipse.swt.browser.Browser
-import org.eclipse.swt.events.FocusEvent
-import org.eclipse.swt.events.FocusListener
-import org.eclipse.swt.events.MouseEvent
-import org.eclipse.swt.events.MouseListener
+import org.eclipse.swt.browser.LocationEvent
+import org.eclipse.swt.browser.LocationListener
+import org.eclipse.swt.events.*
 import org.eclipse.swt.graphics.Device
 import org.eclipse.swt.graphics.Image
 import org.eclipse.swt.graphics.Point
 import org.eclipse.swt.layout.FillLayout
+import org.eclipse.swt.layout.GridData
+import org.eclipse.swt.layout.GridLayout
 import org.eclipse.swt.layout.RowLayout
 import org.eclipse.swt.widgets.*
 import org.eclipse.swt.widgets.List
@@ -43,11 +44,12 @@ class BrowserShell(private val w: Widget) {
     val shell = Shell(WashboardApp.display)
     // https://www.eclipse.org/articles/Article-SWT-browser-widget/DocumentationViewer.java
     val browser = Browser(shell, SWT.NONE)
+    private var loadedcontent = false
 
     fun loadWebviewContent() {
         when(w.type) {
             WidgetType.WEB -> {
-                // test connection
+                // test connection to avoid hangs
                 try {
                     val urlConnect = URL(w.url).openConnection() as HttpURLConnection
                     urlConnect.connect()
@@ -55,7 +57,7 @@ class BrowserShell(private val w: Widget) {
                     w.bs?.browser?.url = w.url
                     w.lastupdatems = System.currentTimeMillis()
                 } catch (e: Exception) {
-                    logger.debug("loadwvc $w test connection: exception $e")
+                    logger.error("loadwvc $w test connection: exception $e")
                 }
             }
             WidgetType.LOCAL -> {
@@ -95,8 +97,24 @@ class BrowserShell(private val w: Widget) {
             }
             override fun mouseUp(e: MouseEvent?) {}
         })
+        browser.addMouseTrackListener(object: MouseTrackListener {
+            override fun mouseEnter(e: MouseEvent?) {
+                shell.setFocus() // on mouse enter, give this widget focus so that first clicks works!
+            }
+            override fun mouseExit(e: MouseEvent?) {}
+            override fun mouseHover(e: MouseEvent?) {}
+        })
+
         shell.open()
         loadWebviewContent()
+        browser.addLocationListener(object: LocationListener { // for preventing clicks if desired
+            override fun changing(event: LocationEvent?) {
+                if (loadedcontent && !w.enableClicks) event?.doit = false
+            }
+            override fun changed(event: LocationEvent?) {
+                loadedcontent = true
+            }
+        })
     }
 }
 
@@ -106,7 +124,7 @@ class ShellEditWidget(w: Widget) {
         val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
             text = "Edit widget"
             layout = RowLayout(SWT.VERTICAL).apply { this.fill = true }
-            setSize(200, 250)
+            setSize(350, 250)
         }
         when(w.type) {
             WidgetType.LOCAL -> {
@@ -206,12 +224,15 @@ class ShellHistory {
 }
 
 object WashboardApp {
+    lateinit var display: Display
+    private lateinit var mainShell: Shell
     private var focusTimer: Timer? = null
     private var appShown = true
     private var serverSocket: ServerSocket? = null
     private var revealThread: Thread? = null
     private val keymaster = Provider.getCurrentProvider(false) // global keyboard shortcut listener
     var lastActiveWidget: Widget? = null
+    private var logtext: Text? = null
 
     private fun beforeQuit() {
         keymaster.reset()
@@ -261,12 +282,10 @@ object WashboardApp {
     }
 
     private fun quitApp() {
+        Global.dolog = {}
         beforeQuit()
         exitProcess(0)
     }
-
-    lateinit var display: Display
-    private lateinit var mainShell: Shell
 
     fun showWidget(w: Widget, addToSettings: Boolean = true) {
         w.bs = BrowserShell(w)
@@ -299,9 +318,15 @@ object WashboardApp {
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().setActivationPolicy(1)
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
 
-        mainShell = Shell(display)
-        mainShell.text = "WashboardSwt"
-        mainShell.layout = FillLayout()
+        mainShell = Shell(display).apply {
+            text = "WashboardSwt"
+            layout = GridLayout(1, false)
+            setSize(250, 200)
+        }
+
+        logtext = Text(mainShell, SWT.MULTI or SWT.H_SCROLL or SWT.V_SCROLL).apply {
+            layoutData = GridData(SWT.FILL, SWT.FILL, true, true)
+        }
 
         display.addFilter(SWT.KeyDown) {
             logger.debug("disp keydown: ${it.keyCode} $it")
@@ -332,10 +357,9 @@ object WashboardApp {
         wMenuItem(menu, "Quit") { quitApp() }
         trayItem.addListener(SWT.MenuDetect) {
             if (!appShown) showApp()
-            menu.isVisible = true
+            display.asyncExec { menu.isVisible = true }
         }
 
-        mainShell.pack()
         mainShell.open()
 
         serverSocket = ServerSocket(0)
@@ -361,10 +385,11 @@ object WashboardApp {
             quitApp()
         }})
 
+        updateGlobalshortcut() // important to do before loading browser widgets!
         showAllWidgets()
-        updateGlobalshortcut()
         showApp() // call here, starts focus timer
 
+        Global.dolog = { display.syncExec { logtext?.append(it) } }
 //        wstest() // TODO test dashboardwidgets
 
         // run gui
@@ -422,6 +447,9 @@ object WashboardApp {
 
 }
 
+object Global {
+    var dolog: (String) -> Unit = { }
+}
 
 fun main() {
 
@@ -457,6 +485,7 @@ fun main() {
     class MyConsole(val errchan: Boolean) : OutputStream() {
         override fun write(b: Int) {
             logps?.write(b)
+            Global.dolog(b.toChar().toString())
             (if (errchan) oldErr else oldOut).print(b.toChar().toString())
         }
     }

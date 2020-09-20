@@ -1,6 +1,6 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-val kotlinversion = "1.3.72"
+val kotlinversion = "1.4.0"
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
 val cPlatforms = listOf("mac") // compile for these platforms. "mac", "linux", "win"
@@ -9,15 +9,15 @@ println("Current Java version: ${JavaVersion.current()}")
 if (JavaVersion.current().majorVersion.toInt() < 14) throw GradleException("Use Java >= 14")
 
 plugins {
-    kotlin("jvm") version "1.3.72"
+    kotlin("jvm") version "1.4.0"
     application
-    id("com.github.ben-manes.versions") version "0.28.0"
-    id("org.beryx.runtime") version "1.9.1"
+    id("com.github.ben-manes.versions") version "0.31.0"
+    id("org.beryx.runtime") version "1.11.4"
 }
 
 repositories {
     jcenter()
-    maven("https://oss.sonatype.org/content/repositories/snapshots") // jkeymaster
+    //maven("https://oss.sonatype.org/content/repositories/snapshots") // jkeymaster
 }
 
 application {
@@ -29,10 +29,10 @@ application {
 dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
-    implementation("io.github.microutils:kotlin-logging:1.8.0.1")
+    implementation("io.github.microutils:kotlin-logging:1.8.3")
     implementation("org.slf4j:slf4j-simple:1.8.0-beta4") // no colors, everything stderr
     implementation("com.github.gimlet2:kottpd:0.1.4") // for dashboard widgets web server
-    implementation("com.github.tulskiy:jkeymaster:1.3-SNAPSHOT") // for global key
+    implementation("com.github.tulskiy:jkeymaster:1.3") // for global key
     implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.114.100") {
         isTransitive = false
     }
@@ -43,7 +43,7 @@ dependencies {
 runtime {
     options.set(listOf("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages"))
     // first row: suggestModules
-    modules.set(listOf("java.desktop",
+    modules.set(listOf("java.desktop", "java.logging",
             "jdk.crypto.cryptoki","jdk.crypto.ec")) // for https URL connection test
 
     if (cPlatforms.contains("mac")) targetPlatform("mac", System.getenv("JDK_MAC_HOME"))
@@ -52,8 +52,8 @@ runtime {
 }
 
 open class CrossPackage : DefaultTask() {
-    @org.gradle.api.tasks.Input var execfilename = "execfilename"
-    @org.gradle.api.tasks.Input var macicnspath = "macicnspath"
+    @Input var execfilename = "execfilename"
+    @Input var macicnspath = "macicnspath"
 
     @TaskAction
     fun crossPackage() {
