@@ -1,6 +1,6 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-val kotlinversion = "1.4.0"
+val kotlinversion = "1.4.10"
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
 val cPlatforms = listOf("mac") // compile for these platforms. "mac", "linux", "win"
@@ -9,9 +9,9 @@ println("Current Java version: ${JavaVersion.current()}")
 if (JavaVersion.current().majorVersion.toInt() < 14) throw GradleException("Use Java >= 14")
 
 plugins {
-    kotlin("jvm") version "1.4.0"
+    kotlin("jvm") version "1.4.10"
     application
-    id("com.github.ben-manes.versions") version "0.31.0"
+    id("com.github.ben-manes.versions") version "0.33.0"
     id("org.beryx.runtime") version "1.11.4"
 }
 
@@ -29,11 +29,11 @@ application {
 dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
-    implementation("io.github.microutils:kotlin-logging:1.8.3")
+    implementation("io.github.microutils:kotlin-logging:2.0.3")
     implementation("org.slf4j:slf4j-simple:1.8.0-beta4") // no colors, everything stderr
-    implementation("com.github.gimlet2:kottpd:0.1.4") // for dashboard widgets web server
+    implementation("com.github.gimlet2:kottpd:0.2.0") // for dashboard widgets web server
     implementation("com.github.tulskiy:jkeymaster:1.3") // for global key
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.114.100") {
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.115.0") {
         isTransitive = false
     }
 

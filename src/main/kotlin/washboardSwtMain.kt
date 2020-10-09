@@ -2,24 +2,22 @@ import com.tulskiy.keymaster.common.Provider
 import mu.KLogger
 import mu.KotlinLogging
 import org.eclipse.swt.SWT
-import org.eclipse.swt.browser.Browser
-import org.eclipse.swt.browser.LocationEvent
-import org.eclipse.swt.browser.LocationListener
-import org.eclipse.swt.events.*
 import org.eclipse.swt.graphics.Device
 import org.eclipse.swt.graphics.Image
-import org.eclipse.swt.graphics.Point
-import org.eclipse.swt.layout.FillLayout
 import org.eclipse.swt.layout.GridData
 import org.eclipse.swt.layout.GridLayout
-import org.eclipse.swt.layout.RowLayout
 import org.eclipse.swt.widgets.*
-import org.eclipse.swt.widgets.List
-import org.kottpd.HttpRequest
-import org.kottpd.HttpResponse
-import org.kottpd.Server
-import java.io.*
-import java.net.*
+import com.github.gimlet2.kottpd.HttpRequest
+import com.github.gimlet2.kottpd.HttpResponse
+import com.github.gimlet2.kottpd.Server
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
+import java.io.PrintStream
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.net.SocketException
 import java.util.*
 import javax.swing.KeyStroke
 import kotlin.concurrent.fixedRateTimer
@@ -29,199 +27,6 @@ import kotlin.system.exitProcess
 
 
 private lateinit var logger: KLogger
-
-
-
-class Widget(val type: WidgetType, var url: String = "", var x: Int = 100, var y: Int = 100,
-             var wx: Int = 250, var wy: Int = 250, var updateIntervalMins: Int = 30,
-             var enableClicks: Boolean = false) {
-    var bs: BrowserShell? = null
-    var lastupdatems: Long = 0
-    override fun toString() = "[${url}]"
-}
-
-class BrowserShell(private val w: Widget) {
-    val shell = Shell(WashboardApp.display)
-    // https://www.eclipse.org/articles/Article-SWT-browser-widget/DocumentationViewer.java
-    val browser = Browser(shell, SWT.NONE)
-    private var loadedcontent = false
-
-    fun loadWebviewContent() {
-        when(w.type) {
-            WidgetType.WEB -> {
-                // test connection to avoid hangs
-                try {
-                    val urlConnect = URL(w.url).openConnection() as HttpURLConnection
-                    urlConnect.connect()
-                    urlConnect.disconnect()
-                    w.bs?.browser?.url = w.url
-                    w.lastupdatems = System.currentTimeMillis()
-                } catch (e: Exception) {
-                    logger.error("loadwvc $w test connection: exception $e")
-                }
-            }
-            WidgetType.LOCAL -> {
-                val f = File("${AppSettings.getLocalWidgetPath()}/${w.url}/index.html")
-                logger.debug("[$w] url: ${f.toURI()}")
-                w.bs?.browser?.url = f.toURI().toString()
-                w.lastupdatems = System.currentTimeMillis()
-            }
-            WidgetType.DASHBOARD -> error("not impl")
-        }
-    }
-
-    fun update() {
-        browser.url = w.url
-    }
-
-    init {
-        shell.layout = FillLayout()
-        shell.location = Point(w.x, w.y)
-        shell.size = Point(w.wx, w.wy)
-        @Suppress("ObjectLiteralToLambda") // lambda doesn't work here
-        shell.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) {
-            logger.info("Removing widget $w from widgets!")
-            Settings.widgets.remove(w)
-            Settings.saveSettings()
-        }})
-        browser.addFocusListener(object: FocusListener {
-            override fun focusLost(e: FocusEvent?) {}
-            override fun focusGained(e: FocusEvent?) {
-                WashboardApp.lastActiveWidget = w
-            }
-        })
-        browser.addMouseListener(object: MouseListener {
-            override fun mouseDoubleClick(e: MouseEvent?) {}
-            override fun mouseDown(e: MouseEvent?) {
-                if (!w.enableClicks) Helpers.openURL(w.url)
-            }
-            override fun mouseUp(e: MouseEvent?) {}
-        })
-        browser.addMouseTrackListener(object: MouseTrackListener {
-            override fun mouseEnter(e: MouseEvent?) {
-                shell.setFocus() // on mouse enter, give this widget focus so that first clicks works!
-            }
-            override fun mouseExit(e: MouseEvent?) {}
-            override fun mouseHover(e: MouseEvent?) {}
-        })
-
-        shell.open()
-        loadWebviewContent()
-        browser.addLocationListener(object: LocationListener { // for preventing clicks if desired
-            override fun changing(event: LocationEvent?) {
-                if (loadedcontent && !w.enableClicks) event?.doit = false
-            }
-            override fun changed(event: LocationEvent?) {
-                loadedcontent = true
-            }
-        })
-    }
-}
-
-class ShellEditWidget(w: Widget) {
-    private var turl: Text? = null
-    init {
-        val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
-            text = "Edit widget"
-            layout = RowLayout(SWT.VERTICAL).apply { this.fill = true }
-            setSize(350, 250)
-        }
-        when(w.type) {
-            WidgetType.LOCAL -> {
-                Label(shell, SWT.NONE).apply { text = "Local widgets reside in a folder below\n${AppSettings.getLocalWidgetPath()},\nand should at least contain index.html" }
-                turl = Text(shell, SWT.NONE).apply { text = w.url }
-                wButton(shell, "Choose...") {
-                    WashboardApp.stopFocusTimer()
-                    DirectoryDialog(shell, SWT.OPEN).apply {
-                        text = "Select widget folder"
-                        filterPath = AppSettings.getLocalWidgetPath()
-                    }.open()?.let {
-                        turl!!.text = AppSettings.removePrefixPath(it, AppSettings.getLocalWidgetPath())
-                    }
-                    WashboardApp.startFocusTimer()
-                }
-            }
-            WidgetType.WEB -> {
-                Label(shell, SWT.NONE).apply { text = "URL:" }
-                turl = Text(shell, SWT.NONE).apply { text = w.url }
-            }
-            WidgetType.DASHBOARD -> {
-                error("not impl")
-            }
-        }
-        Label(shell, SWT.NONE).apply { text = "Update interval (minutes)" }
-        val tupdi = Text(shell, SWT.NONE).apply { text = w.updateIntervalMins.toString() }
-        Label(shell, SWT.NONE).apply { text = "Enable mouse clicks (otherwise open URL)" }
-        val bclic = Button(shell, SWT.CHECK).apply { selection = w.enableClicks }
-        wButton(shell, "Update") {
-            w.url = turl!!.text
-            w.updateIntervalMins = tupdi.text.toIntOrNull()?:w.updateIntervalMins
-            w.enableClicks = bclic.selection
-            w.bs?.update()
-            Settings.widgethistory.add(w)
-            WashboardApp.showWidget(w)
-            Settings.saveSettings()
-            shell.close()
-        }
-        wButton(shell, "Cancel") { shell.close() }
-        shell.pack()
-        shell.open()
-    }
-}
-
-class ShellSettings {
-    init {
-        val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
-            text = "Settings"
-            layout = RowLayout(SWT.VERTICAL).apply { this.fill = true }
-            setSize(200, 250)
-        }
-        Label(shell, SWT.NONE).apply { text = "Global keyboard shortcut (KeyStroke like \"shift F12\")" }
-        val tgsc = Text(shell, SWT.NONE).apply { text = Settings.settings.globalshortcut }
-        wButton(shell, "Save") {
-            Settings.settings.globalshortcut = tgsc.text
-            WashboardApp.updateGlobalshortcut()
-            Settings.saveSettings()
-            shell.close()
-        }
-        wButton(shell, "Cancel") { shell.close() }
-        shell.pack()
-        shell.open()
-    }
-}
-
-
-class ShellHistory {
-    init {
-        val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
-            text = "Washboard History"
-            layout = RowLayout(SWT.VERTICAL).apply { fill = true }
-            setSize(200, 250)
-        }
-        val lv = List(shell, SWT.H_SCROLL or SWT.V_SCROLL)
-        Settings.widgethistory.forEach {
-            logger.debug("hist: $it")
-            lv.add(it.toString())
-        }
-        wButton(shell, "Add widget") {
-            if (lv.selectionIndex > -1) {
-                WashboardApp.showWidget(Settings.widgethistory[lv.selectionIndex])
-                Settings.saveSettings()
-            }
-        }
-
-        wButton(shell, "Delete") {
-            if (lv.selectionIndex > -1) {
-                Settings.widgethistory.removeAt(lv.selectionIndex)
-                lv.remove(lv.selectionIndex)
-                Settings.saveSettings()
-            }
-        }
-
-        shell.pack()
-        shell.open()
-    }
-}
 
 object WashboardApp {
     lateinit var display: Display
@@ -390,7 +195,7 @@ object WashboardApp {
         showApp() // call here, starts focus timer
 
         Global.dolog = { display.syncExec { logtext?.append(it) } }
-//        wstest() // TODO test dashboardwidgets
+//        wstest() // TODO test dashboardwidgets, blocks execution
 
         // run gui
         while (!mainShell.isDisposed) {
@@ -440,7 +245,9 @@ object WashboardApp {
     fun wstest() {
         val server = Server(9876)
         myStaticFiles(server, "${AppSettings.getDashboardWidgetPath()}/Sol.wdgt")
+        logger.debug("starting test server...")
         server.start()
+        logger.debug("started test server, sleep forever!")
         Thread.sleep(123456789)
         server.threadPool.shutdownNow() // TODO does this stop?
     }
