@@ -7,20 +7,22 @@ private val logger = KotlinLogging.logger {}
 
 class Widget(val type: WidgetType, var url: String = "", var x: Int = 100, var y: Int = 100,
              var wx: Int = 250, var wy: Int = 250, var updateIntervalMins: Int = 30,
-             var enableClicks: Boolean = false) {
+             var enableClicks: Boolean = true) {
     var bs: BrowserShell? = null
     var lastupdatems: Long = 0L
     override fun toString() = "[${url}]"
 }
 
-class ShellEditWidget(w: Widget) {
+class ShellEditWidget(w: Widget, isnew: Boolean) {
     private var turl: Text? = null
     init {
+        Global.toolWindowsActive.incrementAndGet()
         val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
-            text = (if (w.lastupdatems == 0L) "New" else "Edit") + " ${w.type.name} widget"
+            text = (if (isnew) "New" else "Edit") + " ${w.type.name} widget"
             layout = RowLayout(SWT.VERTICAL).apply { this.fill = true }
             setSize(350, 250)
         }
+        addCloseListenerEnableTracking(shell)
         when(w.type) {
             WidgetType.LOCAL -> {
                 Label(shell, SWT.NONE).apply { text = "Local widgets reside in a folder below\n${AppSettings.getLocalWidgetPath()},\nand should at least contain index.html" }
@@ -40,21 +42,19 @@ class ShellEditWidget(w: Widget) {
                 Label(shell, SWT.NONE).apply { text = "URL:" }
                 turl = Text(shell, SWT.NONE).apply { text = w.url }
             }
-            WidgetType.DASHBOARD -> {
-                error("not impl")
-            }
         }
         Label(shell, SWT.NONE).apply { text = "Update interval (minutes)" }
         val tupdi = Text(shell, SWT.NONE).apply { text = w.updateIntervalMins.toString() }
-        Label(shell, SWT.NONE).apply { text = "Enable mouse clicks (otherwise open URL)" }
+        Label(shell, SWT.NONE).apply { text = "Enable mouse clicks (otherwise open URL). Note that redirecting widgets need this enabled, too." }
         val bclic = Button(shell, SWT.CHECK).apply { selection = w.enableClicks }
-        wButton(shell, "Update") {
+        wButton(shell, if (isnew) "Save" else "Update") {
             w.url = turl!!.text
             w.updateIntervalMins = tupdi.text.toIntOrNull()?:w.updateIntervalMins
             w.enableClicks = bclic.selection
-            w.bs?.update()
-            Settings.widgethistory.add(w)
-            WashboardApp.showWidget(w)
+            w.bs?.loadWebviewContent()
+            if (isnew) {
+                WashboardApp.showWidget(w, isnew)
+            }
             Settings.saveSettings()
             shell.close()
         }
@@ -66,11 +66,13 @@ class ShellEditWidget(w: Widget) {
 
 class ShellSettings {
     init {
+        Global.toolWindowsActive.incrementAndGet()
         val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
             text = "Settings"
             layout = RowLayout(SWT.VERTICAL).apply { this.fill = true }
             setSize(200, 250)
         }
+        addCloseListenerEnableTracking(shell)
         Label(shell, SWT.NONE).apply { text = "Global keyboard shortcut (KeyStroke like \"shift F12\")" }
         val tgsc = Text(shell, SWT.NONE).apply { text = Settings.settings.globalshortcut }
         wButton(shell, "Save") {
@@ -85,30 +87,40 @@ class ShellSettings {
     }
 }
 
+fun addCloseListenerEnableTracking(shell: Shell) {
+    @Suppress("ObjectLiteralToLambda") // lambda doesn't work here
+    shell.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) {
+        logger.info("Re-enable focus tracking!")
+        Global.toolWindowsActive.decrementAndGet()
+    }})
+}
 
 class ShellHistory {
     init {
+        Global.toolWindowsActive.incrementAndGet()
         val shell = Shell(WashboardApp.display/*, SWT.BORDER or SWT.APPLICATION_MODAL*/).apply {
             text = "Washboard History"
             layout = RowLayout(SWT.VERTICAL).apply { fill = true }
             setSize(200, 250)
         }
+        addCloseListenerEnableTracking(shell)
         val lv = List(shell, SWT.H_SCROLL or SWT.V_SCROLL)
         Settings.widgethistory.forEach {
-            logger.debug("hist: $it")
             lv.add(it.toString())
         }
-        wButton(shell, "Add widget") {
+        wButton(shell, "Load widget") {
             if (lv.selectionIndex > -1) {
-                WashboardApp.showWidget(Settings.widgethistory[lv.selectionIndex])
+                WashboardApp.showWidget(Settings.widgethistory[lv.selectionIndex], true)
                 Settings.saveSettings()
             }
         }
 
         wButton(shell, "Delete") {
-            if (lv.selectionIndex > -1) {
-                Settings.widgethistory.removeAt(lv.selectionIndex)
-                lv.remove(lv.selectionIndex)
+            val seli = lv.selectionIndex
+            if (seli > -1) {
+                Settings.widgethistory.removeAt(seli)
+                lv.remove(seli)
+                if (lv.itemCount > seli) lv.select(seli) else if (seli > 0) lv.select(seli - 1)
                 Settings.saveSettings()
             }
         }

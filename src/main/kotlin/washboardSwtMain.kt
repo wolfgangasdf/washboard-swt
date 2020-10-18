@@ -7,9 +7,6 @@ import org.eclipse.swt.graphics.Image
 import org.eclipse.swt.layout.GridData
 import org.eclipse.swt.layout.GridLayout
 import org.eclipse.swt.widgets.*
-import com.github.gimlet2.kottpd.HttpRequest
-import com.github.gimlet2.kottpd.HttpResponse
-import com.github.gimlet2.kottpd.Server
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
@@ -19,6 +16,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.KeyStroke
 import kotlin.concurrent.fixedRateTimer
 import kotlin.concurrent.schedule
@@ -92,7 +90,7 @@ object WashboardApp {
         exitProcess(0)
     }
 
-    fun showWidget(w: Widget, addToSettings: Boolean = true) {
+    fun showWidget(w: Widget, addToSettings: Boolean) {
         w.bs = BrowserShell(w)
         w.bs!!.loadWebviewContent()
         if (addToSettings) Settings.widgets.add(w)
@@ -148,18 +146,20 @@ object WashboardApp {
         wMenuItem(menu, "About washboard") { Helpers.openURL("https://quphotonics.org") }
         wMenuItem(menu, "Show") { showApp() }
         wMenuItem(menu, "Hide") { hideApp() }
-        wMenuItem(menu, "Add web widget") {
-            val w = Widget(WidgetType.WEB)
-            ShellEditWidget(w)
-        }
-        wMenuItem(menu, "Add local widget") { ShellEditWidget(Widget(WidgetType.LOCAL)) }
-        wMenuItem(menu, "Edit widget") {
-            Settings.widgets.find { it.bs!!.browser.isFocusControl }?.also { ShellEditWidget(it) }
-        }
-        wMenuItem(menu, "History") { ShellHistory() }
         wMenuItem(menu, "Settings") { ShellSettings() }
         wMenuItem(menu, "Settings folder") { Helpers.revealFile(AppSettings.getSettingFile()) }
         wMenuItem(menu, "Quit") { quitApp() }
+        MenuItem(menu, SWT.SEPARATOR)
+        wMenuItem(menu, "Refresh widget") {
+            Settings.widgets.find { it.bs!!.browser.isFocusControl }?.also { it.bs!!.loadWebviewContent() }
+        }
+        wMenuItem(menu, "Edit widget") {
+            Settings.widgets.find { it.bs!!.browser.isFocusControl }?.also { ShellEditWidget(it, false) }
+        }
+        wMenuItem(menu, "Add web widget") { ShellEditWidget(Widget(WidgetType.WEB), true) }
+        wMenuItem(menu, "Add local widget") { ShellEditWidget(Widget(WidgetType.LOCAL), true) }
+        wMenuItem(menu, "Widget History") { ShellHistory() }
+        MenuItem(menu, SWT.SEPARATOR)
         trayItem.addListener(SWT.MenuDetect) {
             if (!appShown) showApp()
             display.asyncExec { menu.isVisible = true }
@@ -194,9 +194,8 @@ object WashboardApp {
         showAllWidgets()
         showApp() // call here, starts focus timer
 
-        Global.dolog = { display.syncExec { logtext?.append(it) } }
-//        wstest() // TODO test dashboardwidgets, blocks execution
 
+        //Global.dolog = { display.asyncExec { logtext?.append(it) } } // slow. also make sure GUI appears very soon!
         // run gui
         while (!mainShell.isDisposed) {
             if (!display.readAndDispatch()) display.sleep()
@@ -205,57 +204,11 @@ object WashboardApp {
         quitApp()
     }
 
-    @Suppress("SameParameterValue")
-    private fun myStaticFiles(server: Server, abspath: String) {
-        fun mywalk(abspath: String, prefix: String, func: (File, HttpRequest, HttpResponse) -> Unit) {
-            File(abspath).walkTopDown().forEach { file ->
-                if (!file.isDirectory) {
-                    val rp = file.path.substring(abspath.length)
-                    var doit = true
-                    var url = prefix + rp
-                    // only use en locale, must be served from /
-                    if (rp.contains("en.lproj/")) {
-                        url = prefix + rp.substring("en.lproj/".length)
-                    } else if (rp.contains(".lproj/")) {
-                        doit = false
-                    }
-                    if (doit) {
-                        server.get(url) { req, res -> func(file, req, res) }
-                        logger.debug("started get for $url")
-                    }
-                }
-            }
-        }
-        // add for widget files
-        val x = "SystemLibraryWidgetResources"
-        mywalk(abspath, "") { file, _, res ->
-            val s = file.readText().replace("file:///System/Library/WidgetResources/", "/$x/")
-            res.send(s)
-        }
-
-        // add apple support files
-        mywalk(this.javaClass.getResource(x).file, "/$x") { file, _, res ->
-            val s = file.readText().replace("file:///System/Library/WidgetResources/", "/$x/")
-            res.send(s)
-        }
-    }
-
-    // TODO web server test
-    @Suppress("unused")
-    fun wstest() {
-        val server = Server(9876)
-        myStaticFiles(server, "${AppSettings.getDashboardWidgetPath()}/Sol.wdgt")
-        logger.debug("starting test server...")
-        server.start()
-        logger.debug("started test server, sleep forever!")
-        Thread.sleep(123456789)
-        server.threadPool.shutdownNow() // TODO does this stop?
-    }
-
 }
 
 object Global {
     var dolog: (String) -> Unit = { }
+    val toolWindowsActive = AtomicInteger(0) // to disable focus tracking if tool windows are active
 }
 
 fun main() {

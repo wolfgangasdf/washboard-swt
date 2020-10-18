@@ -19,14 +19,12 @@ object AppSettings {
             else -> error(Exception("operating system not found"))
         }
         File(getLocalWidgetPath()).let { if (!it.isDirectory) it.mkdirs() }
-        File(getDashboardWidgetPath()).let { if (!it.isDirectory) it.mkdirs() }
     }
 
     fun getSettingFile(): File = File("$settpath/washboard.properties")
     fun getLocalWidgetPath(): String = "$settpath/widgets"
     fun removePrefixPath(path: String, prefixPath: String): String =
             File(path).absolutePath.removePrefix(File(prefixPath).absolutePath + "/")
-    fun getDashboardWidgetPath(): String = "$settpath/dashboardwidgets"
 
     val lockFile = File("$settpath/lockfile.lock")
     fun getLock(): Boolean = lockFile.createNewFile()
@@ -39,8 +37,7 @@ class MainSettings(var globalshortcut: String = "")
 
 enum class WidgetType(val i: Int) {
     WEB(0),
-    LOCAL(1),
-    DASHBOARD(2);
+    LOCAL(1);
     companion object {
         fun fromInt(v: Int) = values().first { it.i == v }
     }
@@ -52,7 +49,7 @@ object Settings {
     val widgethistory = arrayListOf<Widget>()
 
     private fun saveWidget(props: Properties, prefix: String, w: Widget, isHistory: Boolean) {
-        logger.debug("save widget [$prefix]: $w")
+        // logger.debug("save widget [$prefix]: $w")
         props["$prefix.type"] = w.type.i.toString()
         props["$prefix.url"] = w.url
         props["$prefix.x"] = (if (isHistory) w.x else w.bs!!.shell.location.x).toString()

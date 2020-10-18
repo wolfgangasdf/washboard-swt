@@ -23,7 +23,8 @@ repositories {
 application {
     // Define the main class for the application.
     mainClassName = "WashboardSwtMainKt"
-    applicationDefaultJvmArgs = listOf("-XstartOnFirstThread")
+    applicationDefaultJvmArgs = listOf("-Dprism.verbose=true", "-Dprism.order=sw", // use software renderer
+    	"-XstartOnFirstThread")
 }
 
 dependencies {
@@ -31,7 +32,6 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
     implementation("io.github.microutils:kotlin-logging:2.0.3")
     implementation("org.slf4j:slf4j-simple:1.8.0-beta4") // no colors, everything stderr
-    implementation("com.github.gimlet2:kottpd:0.2.0") // for dashboard widgets web server
     implementation("com.github.tulskiy:jkeymaster:1.3") // for global key
     implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.115.0") {
         isTransitive = false
