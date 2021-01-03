@@ -17,6 +17,7 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.KeyStroke
 import kotlin.concurrent.fixedRateTimer
 import kotlin.concurrent.schedule
@@ -36,6 +37,8 @@ object WashboardApp {
     private val keymaster = Provider.getCurrentProvider(false) // global keyboard shortcut listener
     var lastActiveWidget: Widget? = null
     private var logtext: Text? = null
+    private val logstring = AtomicReference("")
+    private var logTimer: TimerTask? = null
 
     private fun beforeQuit() {
         keymaster.reset()
@@ -194,8 +197,20 @@ object WashboardApp {
         showAllWidgets()
         showApp() // call here, starts focus timer
 
+        // logging: written by character, shown every 200ms
+        fun startLogTimer() {
+            logTimer?.cancel()
+            logTimer = Timer("log timer", false).schedule(200) {
+                display.asyncExec {
+                    logtext?.append(logstring.getAndSet(""))
+                }
+            }
+        }
+        Global.dolog = {
+            if (logstring.get().isEmpty()) startLogTimer()
+            logstring.getAndUpdate { olds -> olds + it }
+        }
 
-        //Global.dolog = { display.asyncExec { logtext?.append(it) } } // slow. also make sure GUI appears very soon!
         // run gui
         while (!mainShell.isDisposed) {
             if (!display.readAndDispatch()) display.sleep()
