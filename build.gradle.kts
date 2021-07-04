@@ -1,6 +1,6 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-val kotlinversion = "1.4.21"
+val kotlinversion = "1.5.20"
 val javaversion = 15
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
@@ -10,14 +10,14 @@ println("Current Java version: ${JavaVersion.current()}")
 if (JavaVersion.current().majorVersion.toInt() < javaversion) throw GradleException("Use Java >= $javaversion")
 
 plugins {
-    kotlin("jvm") version "1.4.21"
+    kotlin("jvm") version "1.5.20"
     application
-    id("com.github.ben-manes.versions") version "0.36.0"
-    id("org.beryx.runtime") version "1.12.1"
+    id("com.github.ben-manes.versions") version "0.39.0"
+    id("org.beryx.runtime") version "1.12.5"
 }
 
 repositories {
-    jcenter()
+    mavenCentral()
     //maven("https://oss.sonatype.org/content/repositories/snapshots") // jkeymaster
 }
 
@@ -31,9 +31,10 @@ application {
 dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
-    implementation("io.github.microutils:kotlin-logging:2.0.4")
+    implementation("io.github.microutils:kotlin-logging:2.0.8")
     implementation("org.slf4j:slf4j-simple:1.8.0-beta4") // no colors, everything stderr
     implementation("com.github.tulskiy:jkeymaster:1.3") // for global key
+    // swt: hide dock icon doesn't work in 3.116.100
     implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.115.100") {
         isTransitive = false
     }

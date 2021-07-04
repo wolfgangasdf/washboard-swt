@@ -10,9 +10,9 @@ import java.io.File
 import java.net.URI
 
 object Helpers {
-    fun isMac() = System.getProperty("os.name").toLowerCase().contains("mac")
-    fun isLinux() = System.getProperty("os.name").toLowerCase().matches("(.*nix)|(.*nux)".toRegex())
-    fun isWin() = System.getProperty("os.name").toLowerCase().contains("win")
+    fun isMac() = System.getProperty("os.name").lowercase().contains("mac")
+    fun isLinux() = System.getProperty("os.name").lowercase().matches("(.*nix)|(.*nux)".toRegex())
+    fun isWin() = System.getProperty("os.name").lowercase().contains("win")
 
     fun toJavaPathSeparator(input: String): String =
             if (isWin()) input.replace("""\\""", "/")

@@ -123,6 +123,10 @@ object WashboardApp {
         // hide dock icon related to https://stackoverflow.com/questions/2832961/is-it-possible-to-hide-the-dock-icon-programmatically?rq=1
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().setActivationPolicy(1)
         org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
+//        System.setProperty("LSUIElement", "true") // doesn't work, also not in pinfo/launch cmd
+//        System.setProperty("apple.awt.UIElement", "true")
+//        System.setProperty("apple.awt.headless", "true")
+//        System.setProperty("java.awt.headless", "true")
 
         mainShell = Shell(display).apply {
             text = "WashboardSwt"
@@ -144,7 +148,7 @@ object WashboardApp {
         assert (tray != null) { "can't get tray!!" }
         val trayItem = TrayItem(tray, SWT.NONE)
         trayItem.toolTipText = "Washboard"
-        trayItem.image = Image(display, javaClass.getResource("icon16x16.png").openStream())
+        trayItem.image = Image(display, javaClass.getResource("icon16x16.png")!!.openStream())
         val menu = Menu(mainShell, SWT.PUSH)
         wMenuItem(menu, "About washboard") { Helpers.openURL("https://quphotonics.org") }
         wMenuItem(menu, "Show") { showApp() }
