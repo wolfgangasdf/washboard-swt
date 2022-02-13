@@ -21,8 +21,8 @@ Shows some website, saves cookies. Ideas:
 I thought about implementing this, however, since even Sol.wdgt uses some compiled 
 helper tools, this doesn't make sense. It's easy to rewrite widgets using only html, js & co. 
 
-# How to run TODO
-[Download a zip](https://github.com/wolfgangasdf/WebRemoteControl/releases), extract it somewhere and run the app (mac), the executable or the bat file in bin/. It is not signed, google for "open unsigned mac/win" (right click -> open on mac).
+# How to run
+[Download a zip](https://github.com/wolfgangasdf/washboard-swt/releases), extract it somewhere and run the app (mac). It is not signed, google for "open unsigned mac" (right click -> open on mac).
 
 ## Notes
 ### Lockfile and revealing (bring to front)
