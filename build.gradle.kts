@@ -34,8 +34,7 @@ dependencies {
     implementation("io.github.microutils:kotlin-logging:2.1.21")
     implementation("org.slf4j:slf4j-simple:1.8.0-beta4") // no colors, everything stderr
     implementation("com.github.tulskiy:jkeymaster:1.3") // for global key
-    // swt: hide dock icon doesn't work in 3.116.100
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.118.0") {
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.115.100") { // TODO later versions make it impossible to hide dock icon
         isTransitive = false
     }
 

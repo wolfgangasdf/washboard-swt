@@ -7,6 +7,7 @@ If a widget doesn't load properly: try setting `enable clicks`, washboard uses a
 
 
 # Widget types
+See the wiki for examples.
 
 ## Local widges
 Local widgets contain at least an index.html file, possibly others (js, css, images,...). 
