@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-val kotlinversion = "1.6.10"
-val javaversion = 17
+val kotlinversion = "1.7.20"
+val javaversion = 18
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
 val cPlatforms = listOf("mac") // compile for these platforms. "mac", "linux", "win"
@@ -10,7 +10,7 @@ println("Current Java version: ${JavaVersion.current()}")
 if (JavaVersion.current().majorVersion.toInt() < javaversion) throw GradleException("Use Java >= $javaversion")
 
 plugins {
-    kotlin("jvm") version "1.6.10"
+    kotlin("jvm") version "1.7.20"
     application
     id("com.github.ben-manes.versions") version "0.42.0"
     id("org.beryx.runtime") version "1.12.7"
@@ -25,16 +25,18 @@ application {
     // Define the main class for the application.
     mainClass.set("WashboardSwtMainKt")
     applicationDefaultJvmArgs = listOf("-Dprism.verbose=true", "-Dprism.order=sw", // use software renderer
-    	"-XstartOnFirstThread")
+    	"-XstartOnFirstThread"
+//        , "-Djava.awt.headless=true", "-Dapple.awt.UIElement=true" // hides menu but not dock icon, see washboardSwtMain.kt
+    )
 }
 
 dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
-    implementation("io.github.microutils:kotlin-logging:2.1.21")
-    implementation("org.slf4j:slf4j-simple:1.8.0-beta4") // no colors, everything stderr
-    implementation("com.github.tulskiy:jkeymaster:1.3") // for global key
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.115.100") { // TODO later versions make it impossible to hide dock icon
+    implementation("io.github.microutils:kotlin-logging:3.0.2")
+    implementation("org.slf4j:slf4j-simple:2.0.3") // no colors, everything stderr
+    implementation("com.github.tulskiy:jkeymaster:1.3") // for global hotkey
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.121.0") {
         isTransitive = false
     }
 

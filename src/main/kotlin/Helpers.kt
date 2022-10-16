@@ -21,7 +21,7 @@ object Helpers {
     fun revealFile(file: File, gointo: Boolean = false) {
         when {
             isMac() -> Runtime.getRuntime().exec(arrayOf("open", if (gointo) "" else "-R", file.path))
-            isWin() -> Runtime.getRuntime().exec("explorer.exe /select,${file.path}")
+            isWin() -> Runtime.getRuntime().exec(arrayOf("explorer.exe", "/select,${file.path}"))
             isLinux() -> error("not supported OS, tell me how to do it!")
             else -> error("not supported OS, tell me how to do it!")
         }

@@ -4,6 +4,7 @@ import mu.KotlinLogging
 import org.eclipse.swt.SWT
 import org.eclipse.swt.graphics.Device
 import org.eclipse.swt.graphics.Image
+import org.eclipse.swt.internal.cocoa.*
 import org.eclipse.swt.layout.GridData
 import org.eclipse.swt.layout.GridLayout
 import org.eclipse.swt.widgets.*
@@ -64,9 +65,9 @@ object WashboardApp {
     }
 
     private fun showApp() {
-        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
+        NSApplication.sharedApplication().activateIgnoringOtherApps(true)
         Timer().schedule(100) { // ugly workaround that not all windows are always on top
-            display.syncExec { org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true) }
+            display.syncExec { NSApplication.sharedApplication().activateIgnoringOtherApps(true) }
         }
         val now = System.currentTimeMillis()
         Settings.widgets.forEach { w ->
@@ -83,7 +84,7 @@ object WashboardApp {
 
     private fun hideApp() {
         stopFocusTimer()
-        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().hide(null)
+        NSApplication.sharedApplication().hide(null)
         appShown = false
     }
 
@@ -117,12 +118,12 @@ object WashboardApp {
     fun launchApp() {
         Device.DEBUG = true
         Display.setAppName("washboard-swt")
-        display = Display.getDefault() // this shows dock icon, no matter what i do!
+        display = Display.getDefault()
         Display.setAppName("washboard-swt") // need twice https://stackoverflow.com/a/45088431
 
         // hide dock icon related to https://stackoverflow.com/questions/2832961/is-it-possible-to-hide-the-dock-icon-programmatically?rq=1
-        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().setActivationPolicy(1)
-        org.eclipse.swt.internal.cocoa.NSApplication.sharedApplication().activateIgnoringOtherApps(true)
+        NSApplication.sharedApplication().setActivationPolicy(1) // NSApplicationActivationPolicyAccessory
+        NSApplication.sharedApplication().activateIgnoringOtherApps(true)
 //        System.setProperty("LSUIElement", "true") // doesn't work, also not in pinfo/launch cmd
 //        System.setProperty("apple.awt.UIElement", "true")
 //        System.setProperty("apple.awt.headless", "true")
@@ -174,6 +175,7 @@ object WashboardApp {
 
         mainShell.open()
 
+        // socket listener to show washboard via e.g. bettertouchtool action mouse hot corner
         serverSocket = ServerSocket(0)
         logger.info("listening on port " + serverSocket?.localPort)
         AppSettings.lockFile.writeText(serverSocket!!.localPort.toString())
@@ -182,9 +184,9 @@ object WashboardApp {
                 try {
                     serverSocket!!.accept()
                     logger.info("revealthread: Connection to socket, reveal!")
-                    display.syncExec {
-                        showApp()
-                    }
+                    display.syncExec { showApp() }
+                    // do again because sometimes not all windows in foreground... ugly hack
+                    display.syncExec { showApp() }
                 } catch (e: SocketException) {
                     logger.debug("revealthread: serversocket got exception: $e")
                 }
@@ -232,13 +234,6 @@ object Global {
 
 fun main() {
 
-    // disable App transport security ATS to allow http (needed also for LAN if hostname used, ip ok)
-    val ats = org.eclipse.swt.internal.cocoa.NSDictionary.dictionaryWithObject(
-            org.eclipse.swt.internal.cocoa.NSNumber.numberWithBool(true),
-            org.eclipse.swt.internal.cocoa.NSString.stringWith("NSAllowsArbitraryLoads"))
-    org.eclipse.swt.internal.cocoa.NSBundle.mainBundle().infoDictionary().setValue(
-            ats, org.eclipse.swt.internal.cocoa.NSString.stringWith("NSAppTransportSecurity"))
-
     val oldOut: PrintStream = System.out
     val oldErr: PrintStream = System.err
     var logps: FileOutputStream? = null
@@ -285,6 +280,22 @@ fun main() {
     logger.debug("debug")
     logger.trace("trace")
 
+    logger.info("fixing bundle dictionary (info.plist)")
+    // since a java launcher script is used, the info.plist from .app (build.gradle.kts) is gone if java is launched.
+    val infoDict = NSBundle.mainBundle()!!.infoDictionary()!!
+    // disable App transport security ATS to allow http (needed also for LAN if hostname used, ip ok). unclear if still needed.
+    val ats = NSDictionary.dictionaryWithObject(NSNumber.numberWithBool(true),NSString.stringWith("NSAllowsArbitraryLoads"))
+    infoDict.setValue(ats, NSString.stringWith("NSAppTransportSecurity"))
+    // fix CFBundlePackageType = APPL, otherwise swt sets setActivationPolicy to NSApplicationActivationPolicyRegular=0, giving it a dock icon
+    // this workaround was not needed in swt 3.115.100, this commit made it necessary:
+    // https://github.com/eclipse-platform/eclipse.platform.swt/commit/e323e5d89a1d1413968d3b1160e632e77227fd72
+    infoDict.setValue(NSString.stringWith("APPL"), NSString.stringWith("CFBundlePackageType"))
+    // log
+    val keys: NSArray = infoDict.allKeys()
+    for (i in 0 until keys.count()) {
+        val key = infoDict.allKeys().objectAtIndex(i)
+        logger.debug("info dictionary: key: ${NSString(key).string} val: ${NSString(infoDict.objectForKey(key)).string}")
+    }
 
     logger.info("starting Washboard!")
 
