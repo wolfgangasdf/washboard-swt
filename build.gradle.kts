@@ -1,19 +1,23 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.util.*
 
-val kotlinversion = "1.7.20"
-val javaversion = 18
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
 val cPlatforms = listOf("mac") // compile for these platforms. "mac", "linux", "win"
-
+val kotlinversion = "1.8.10"
+val javaVersion = 18
 println("Current Java version: ${JavaVersion.current()}")
-if (JavaVersion.current().majorVersion.toInt() < javaversion) throw GradleException("Use Java >= $javaversion")
+if (JavaVersion.current().majorVersion.toInt() != javaVersion) throw GradleException("Use Java $javaVersion")
 
 plugins {
-    kotlin("jvm") version "1.7.20"
+    kotlin("jvm") version "1.8.10"
     application
-    id("com.github.ben-manes.versions") version "0.42.0"
-    id("org.beryx.runtime") version "1.12.7"
+    id("com.github.ben-manes.versions") version "0.44.0"
+    id("org.beryx.runtime") version "1.13.0"
+}
+
+kotlin {
+    jvmToolchain(javaVersion)
 }
 
 repositories {
@@ -33,22 +37,20 @@ application {
 dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
-    implementation("io.github.microutils:kotlin-logging:3.0.2")
-    implementation("org.slf4j:slf4j-simple:2.0.3") // no colors, everything stderr
+    implementation("io.github.microutils:kotlin-logging:3.0.5")
+    implementation("org.slf4j:slf4j-simple:2.0.6") // no colors, everything stderr
     implementation("com.github.tulskiy:jkeymaster:1.3") // for global hotkey
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.121.0") {
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.122.0") {
         isTransitive = false
     }
 
 }
-
 
 runtime {
     options.set(listOf("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages"))
     // first row: suggestModules
     modules.set(listOf("java.desktop", "java.logging",
             "jdk.crypto.cryptoki","jdk.crypto.ec")) // for https URL connection test
-
     if (cPlatforms.contains("mac")) targetPlatform("mac", System.getenv("JDK_MAC_HOME"))
     if (cPlatforms.contains("win")) targetPlatform("win", System.getenv("JDK_WIN_HOME"))
     if (cPlatforms.contains("linux")) targetPlatform("linux", System.getenv("JDK_LINUX_HOME"))
@@ -151,7 +153,8 @@ tasks.withType(CreateStartScripts::class).forEach {script ->
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "$javaVersion"
+    kotlinOptions.freeCompilerArgs = listOf("-Xjsr305=warn")
 }
 
 
@@ -162,4 +165,17 @@ task("dist") {
         project.delete(project.runtime.imageDir.get(), project.runtime.jreDir.get(), "${project.buildDir.path}/install")
         println("Created zips in build/crosspackage")
     }
+}
+
+fun isNonStable(version: String): Boolean {
+    val stableKeyword = listOf("RELEASE", "FINAL", "GA").any { version.uppercase(Locale.getDefault()).contains(it) }
+    val regex = "^[0-9,.v-]+(-r)?$".toRegex()
+    val isStable = stableKeyword || regex.matches(version)
+    return isStable.not()
+}
+tasks.withType<com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask> {
+    rejectVersionIf {
+        isNonStable(candidate.version)
+    }
+    gradleReleaseChannel = "current"
 }
