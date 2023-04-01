@@ -4,13 +4,13 @@ import java.util.*
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
 val cPlatforms = listOf("mac") // compile for these platforms. "mac", "linux", "win"
-val kotlinversion = "1.8.10"
-val javaVersion = 18
+val kotlinversion = "1.8.20"
+val javaVersion = 19
 println("Current Java version: ${JavaVersion.current()}")
 if (JavaVersion.current().majorVersion.toInt() != javaVersion) throw GradleException("Use Java $javaVersion")
 
 plugins {
-    kotlin("jvm") version "1.8.10"
+    kotlin("jvm") version "1.8.20"
     application
     id("com.github.ben-manes.versions") version "0.44.0"
     id("org.beryx.runtime") version "1.13.0"
@@ -22,7 +22,6 @@ kotlin {
 
 repositories {
     mavenCentral()
-    //maven("https://oss.sonatype.org/content/repositories/snapshots") // jkeymaster
 }
 
 application {
@@ -38,12 +37,11 @@ dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
     implementation("io.github.microutils:kotlin-logging:3.0.5")
-    implementation("org.slf4j:slf4j-simple:2.0.6") // no colors, everything stderr
+    implementation("org.slf4j:slf4j-simple:2.0.7") // no colors, everything stderr
     implementation("com.github.tulskiy:jkeymaster:1.3") // for global hotkey
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.122.0") {
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.123.0") {
         isTransitive = false
     }
-
 }
 
 runtime {
@@ -51,9 +49,34 @@ runtime {
     // first row: suggestModules
     modules.set(listOf("java.desktop", "java.logging",
             "jdk.crypto.cryptoki","jdk.crypto.ec")) // for https URL connection test
-    if (cPlatforms.contains("mac")) targetPlatform("mac", System.getenv("JDK_MAC_HOME"))
-    if (cPlatforms.contains("win")) targetPlatform("win", System.getenv("JDK_WIN_HOME"))
-    if (cPlatforms.contains("linux")) targetPlatform("linux", System.getenv("JDK_LINUX_HOME"))
+
+    // sets targetPlatform JDK for host os from toolchain, for others (cross-package) from adoptium / jdkDownload
+    // https://github.com/beryx/badass-runtime-plugin/issues/99
+    // if https://github.com/gradle/gradle/issues/18817 is solved: use toolchain
+    fun setTargetPlatform(jfxplatformname: String) {
+        val platf = if (jfxplatformname == "win") "windows" else jfxplatformname // jfx expects "win" but adoptium needs "windows"
+        val os = org.gradle.internal.os.OperatingSystem.current()
+        val oss = if (os.isLinux) "linux" else if (os.isWindows) "windows" else if (os.isMacOsX) "mac" else ""
+        if (oss == "") throw GradleException("unsupported os")
+        if (oss == platf) {
+            targetPlatform(jfxplatformname, javaToolchains.launcherFor(java.toolchain).get().executablePath.asFile.parentFile.parentFile.absolutePath)
+        } else { // https://api.adoptium.net/q/swagger-ui/#/Binary/getBinary
+            targetPlatform(jfxplatformname) {
+                val ddir = "${if (os.isWindows) "c:/" else "/"}tmp/jdk$javaVersion-$platf"
+                println("downloading jdks to or using jdk from $ddir, delete folder to update jdk!")
+                @Suppress("INACCESSIBLE_TYPE")
+                setJdkHome(
+                    jdkDownload("https://api.adoptium.net/v3/binary/latest/$javaVersion/ga/$platf/x64/jdk/hotspot/normal/eclipse?project=jdk",
+                        closureOf<org.beryx.runtime.util.JdkUtil.JdkDownloadOptions> {
+                            downloadDir = ddir // put jdks here so different projects can use them!
+                            archiveExtension = if (platf == "windows") "zip" else "tar.gz"
+                        }
+                    )
+                )
+            }
+        }
+    }
+    cPlatforms.forEach { setTargetPlatform(it) }
 }
 
 open class CrossPackage : DefaultTask() {
@@ -156,7 +179,6 @@ tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "$javaVersion"
     kotlinOptions.freeCompilerArgs = listOf("-Xjsr305=warn")
 }
-
 
 task("dist") {
     dependsOn("crosspackage")

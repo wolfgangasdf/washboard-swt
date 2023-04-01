@@ -59,7 +59,13 @@ Fullscreen SWT windows can't have subwindows, therefore one would need to write 
 * [Runtime plugin](https://github.com/beryx/badass-runtime-plugin) to make runtimes with JRE
 
 # How "App Transport Security (ATS)" (mac) is circumvented
-Mac OS has "App Transport Security" that prevents opening http pages (which I want in washboard), and this happens with the swt browser widget even on the local network if server names are used (ip works). During development there is no Info.plist where this can be disabled in principle, but also this didn't work here, possibly an issue with the java launcher scripts. In any case, one might want to disable ATS dynamically, the code below works but it was a bit hard to figure out. Note that this issue might only appear if building standalong maven/gradle projects, I guess that eclipse disables ATS at another place, otherwise many more would have issues with this.
+Mac OS has "App Transport Security" that prevents opening http pages (which I want in washboard), and this 
+happens with the swt browser widget even on the local network if server names are used (ip works). 
+During development there is no Info.plist where this can be disabled in principle, but also this didn't work here, 
+possibly an issue with the java launcher scripts. In any case, one might want to disable ATS dynamically, 
+the code below works but it was a bit hard to figure out. Note that this issue might only appear if 
+building standalong maven/gradle projects, I guess that eclipse disables ATS at another place, 
+otherwise many more would have issues with this.
 
 https://bugs.eclipse.org/bugs/show_bug.cgi?id=564094
 
