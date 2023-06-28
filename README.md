@@ -1,7 +1,7 @@
 # Washboard
 A apple mac dashboard replacement. I miss it. It shows local or remote websites or web apps in floating windows, remembers position and size.
 
-Activate it by a global hotkey, see below for other options.
+Activate it using a short, see below for other options.
 
 If a widget doesn't load properly: try setting `enable clicks`, washboard uses a hack to prevent clicks which might interfere.
 
@@ -27,11 +27,15 @@ helper tools, this doesn't make sense. It's easy to rewrite widgets using only h
 
 ## Notes
 ### Lockfile and revealing (bring to front)
-On startup, washboard writes a lockfile (in settings folder) which contains the port number on which washboard listens for connection attempts. Open a connection to this port and washboard is revealed (super fast). If the app is running and is launched again, the running instance is revealed (not very fast).
+On startup, washboard writes a lockfile (in settings folder) which contains the port number on which washboard 
+listens for connection attempts. Open a connection to this port and washboard is revealed (super fast). 
+If the app is running and is launched again, the running instance is revealed (not very fast).
 
-Hot corners activation:
-  * mac: bettertouchtool has "Other" action "Move Mouse to Bottom Right Corner", then use "Execute Terminal Command", enter this:<br>
-``` nc -z localhost `cat "/Users/<USER>/Library/Application Support/Washboard/lockfile.lock"` ```
+Activate the washboard by 
+  * [calling the app via a keyboard shortcut](https://www.wikihow.com/Set-a-Keyboard-Shortcut-to-Open-Mac-Apps)
+  * or hot corners activation with bettertouchtool: go to `automation & named & other triggers` -> trigger `move mouse to bottom right corner` 
+    , then set the action `Execute Terminal Command`, and enter this:<br>
+``` nc -z localhost `cat "/Users/$USER/Library/Application Support/Washboard/lockfile.lock"` ```
 
 ### Browser
 Washboard uses the Eclipse SWT Browser to show widgets, which in turn uses the installed default browser, see Eclipse SWT FAQ. This seems to be the most resource-friedly and secure solution. One should rewrite this using It would be nice to re-write it using golang and zserge-webview
@@ -55,7 +59,6 @@ Fullscreen SWT windows can't have subwindows, therefore one would need to write 
 # Used technologies
 
 * [Kotlin](https://kotlinlang.org/) and [Gradle](https://gradle.org/)
-* [jkeymaster](https://github.com/tulskiy/jkeymaster) for global keyboard shortcut
 * [Runtime plugin](https://github.com/beryx/badass-runtime-plugin) to make runtimes with JRE
 
 # How "App Transport Security (ATS)" (mac) is circumvented

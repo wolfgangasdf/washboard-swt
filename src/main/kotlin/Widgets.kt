@@ -73,11 +73,10 @@ class ShellSettings {
             setSize(200, 250)
         }
         addCloseListenerEnableTracking(shell)
-        Label(shell, SWT.NONE).apply { text = "Global keyboard shortcut (KeyStroke like \"shift F12\")" }
-        val tgsc = Text(shell, SWT.NONE).apply { text = Settings.settings.globalshortcut }
+        Label(shell, SWT.NONE).apply { text = "Test" }
+        val tgsc = Text(shell, SWT.NONE).apply { text = Settings.settings.test }
         wButton(shell, "Save") {
-            Settings.settings.globalshortcut = tgsc.text
-            WashboardApp.updateGlobalshortcut()
+            Settings.settings.test = tgsc.text
             Settings.saveSettings()
             shell.close()
         }

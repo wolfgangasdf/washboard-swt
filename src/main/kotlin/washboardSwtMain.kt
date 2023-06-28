@@ -1,4 +1,3 @@
-import com.tulskiy.keymaster.common.Provider
 import mu.KLogger
 import mu.KotlinLogging
 import org.eclipse.swt.SWT
@@ -35,15 +34,12 @@ object WashboardApp {
     private var appShown = true
     private var serverSocket: ServerSocket? = null
     private var revealThread: Thread? = null
-    private val keymaster = Provider.getCurrentProvider(false) // global keyboard shortcut listener
     var lastActiveWidget: Widget? = null
     private var logtext: Text? = null
     private val logstring = AtomicReference("")
     private var logTimer: TimerTask? = null
 
     private fun beforeQuit() {
-        keymaster.reset()
-        keymaster.stop()
         serverSocket!!.close()
         focusTimer?.cancel()
         Settings.saveSettings()
@@ -102,17 +98,6 @@ object WashboardApp {
 
     private fun showAllWidgets() {
         Settings.widgets.forEach { showWidget(it, false) }
-    }
-
-    fun updateGlobalshortcut() {
-        keymaster.reset()
-        if (Settings.settings.globalshortcut.trim() != "") {
-            keymaster.register(KeyStroke.getKeyStroke(Settings.settings.globalshortcut)) {
-                display.syncExec {
-                    showApp()
-                }
-            }
-        }
     }
 
     fun launchApp() {
@@ -199,7 +184,6 @@ object WashboardApp {
             quitApp()
         }})
 
-        updateGlobalshortcut() // important to do before loading browser widgets!
         showAllWidgets()
         showApp() // call here, starts focus timer
 

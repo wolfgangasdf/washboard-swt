@@ -1,18 +1,19 @@
+import org.gradle.kotlin.dsl.support.zipTo
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.util.*
 
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
-val cPlatforms = listOf("mac") // compile for these platforms. "mac", "linux", "win"
-val kotlinversion = "1.8.20"
+val cPlatforms = listOf("mac-aarch64") // compile for these platforms. "mac", "mac-aarch64", "linux", "win"
+val kotlinversion = "1.8.22"
 val javaVersion = 19
 println("Current Java version: ${JavaVersion.current()}")
 if (JavaVersion.current().majorVersion.toInt() != javaVersion) throw GradleException("Use Java $javaVersion")
 
 plugins {
-    kotlin("jvm") version "1.8.20"
+    kotlin("jvm") version "1.8.22"
     application
-    id("com.github.ben-manes.versions") version "0.44.0"
+    id("com.github.ben-manes.versions") version "0.47.0"
     id("org.beryx.runtime") version "1.13.0"
 }
 
@@ -27,7 +28,7 @@ repositories {
 application {
     // Define the main class for the application.
     mainClass.set("WashboardSwtMainKt")
-    applicationDefaultJvmArgs = listOf("-Dprism.verbose=true", "-Dprism.order=sw", // use software renderer
+    applicationDefaultJvmArgs = listOf("-Dprism.verbose=true",
     	"-XstartOnFirstThread"
 //        , "-Djava.awt.headless=true", "-Dapple.awt.UIElement=true" // hides menu but not dock icon, see washboardSwtMain.kt
     )
@@ -38,8 +39,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
     implementation("io.github.microutils:kotlin-logging:3.0.5")
     implementation("org.slf4j:slf4j-simple:2.0.7") // no colors, everything stderr
-    implementation("com.github.tulskiy:jkeymaster:1.3") // for global hotkey
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.x86_64:3.123.0") {
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.aarch64:3.124.0") {
         isTransitive = false
     }
 }
@@ -56,8 +56,9 @@ runtime {
     fun setTargetPlatform(jfxplatformname: String) {
         val platf = if (jfxplatformname == "win") "windows" else jfxplatformname // jfx expects "win" but adoptium needs "windows"
         val os = org.gradle.internal.os.OperatingSystem.current()
-        val oss = if (os.isLinux) "linux" else if (os.isWindows) "windows" else if (os.isMacOsX) "mac" else ""
+        var oss = if (os.isLinux) "linux" else if (os.isWindows) "windows" else if (os.isMacOsX) "mac" else ""
         if (oss == "") throw GradleException("unsupported os")
+        if (System.getProperty("os.arch") == "aarch64") oss += "-aarch64"// https://github.com/openjfx/javafx-gradle-plugin#4-cross-platform-projects-and-libraries
         if (oss == platf) {
             targetPlatform(jfxplatformname, javaToolchains.launcherFor(java.toolchain).get().executablePath.asFile.parentFile.parentFile.absolutePath)
         } else { // https://api.adoptium.net/q/swagger-ui/#/Binary/getBinary
@@ -89,10 +90,10 @@ open class CrossPackage : DefaultTask() {
         project.runtime.targetPlatforms.get().forEach { (t, _) ->
             println("targetplatform: $t")
             val imgdir = "${project.runtime.imageDir.get()}/${project.name}-$t"
-            println("imagedir: $imgdir")
-            when(t) {
-                "mac" -> {
-                    val appp = File(project.buildDir.path + "/crosspackage/mac/$execfilename.app").path
+            println("imagedir=$imgdir targetplatform=$t")
+            when {
+                t.startsWith("mac") -> {
+                    val appp = File(project.buildDir.path + "/crosspackage/$t/$execfilename.app").path
                     project.delete(appp)
                     project.copy {
                         into(appp)
@@ -150,13 +151,20 @@ open class CrossPackage : DefaultTask() {
                     // touch folder to update Finder
                     File(appp).setLastModified(System.currentTimeMillis())
                     // zip it
-                    org.gradle.kotlin.dsl.support.zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-mac.zip"), File("${project.buildDir.path}/crosspackage/mac"))
+                    zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-$t.zip"), File("${project.buildDir.path}/crosspackage/$t"))
                 }
-                "win" -> {
-                    org.gradle.kotlin.dsl.support.zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-win.zip"), File(imgdir))
+                t == "win" -> {
+                    File("$imgdir/bin/$execfilename.bat").delete() // from runtime, not nice
+                    val pf = File("$imgdir/$execfilename.bat")
+                    pf.writeText("""
+                        set JLINK_VM_OPTIONS=${project.application.applicationDefaultJvmArgs.joinToString(" ")}
+                        set DIR=%~dp0
+                        start "" "%DIR%\bin\javaw" %JLINK_VM_OPTIONS% -classpath "%DIR%/lib/*" ${project.application.mainClass.get()} 
+                    """.trimIndent())
+                    zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-$t.zip"), File(imgdir))
                 }
-                "linux" -> {
-                    org.gradle.kotlin.dsl.support.zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-linux.zip"), File(imgdir))
+                t.startsWith("linux") -> {
+                    zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-$t.zip"), File(imgdir))
                 }
             }
         }

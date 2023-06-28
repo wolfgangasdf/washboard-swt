@@ -33,7 +33,7 @@ object AppSettings {
 
 ///////////////////////// settings
 
-class MainSettings(var globalshortcut: String = "")
+class MainSettings(var test: String = "")
 
 enum class WidgetType(val i: Int) {
     WEB(0),
@@ -73,7 +73,7 @@ object Settings {
     fun saveSettings() {
         val props = Properties()
         props["settingsversion"] = "1"
-        props["wb.globalshortcut"] = settings.globalshortcut
+        props["wb.test"] = settings.test
         props["widgets"] = widgets.size.toString()
         widgets.forEachIndexed { idx, w -> saveWidget(props, "w.$idx", w, false) }
         props["widgethistorysize"] = widgethistory.size.toString()
@@ -94,7 +94,7 @@ object Settings {
             val props = propsx.map { (k, v) -> k.toString() to v.toString() }.toMap()
             if (props["settingsversion"] != "1") error(Exception("wrong settingsversion!"))
             try {
-                settings.globalshortcut = props.getOrDefault("wb.globalshortcut", "")
+                settings.test = props.getOrDefault("wb.test", "")
                 for (idx in 0 until props.getOrDefault("widgets", "0").toInt()) {
                     widgets += loadWidget(props, "w.$idx")
                     logger.debug("loaded widget ${widgets.last()}")
