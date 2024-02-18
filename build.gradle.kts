@@ -5,20 +5,29 @@ import java.util.*
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
 val cPlatforms = listOf("mac-aarch64") // compile for these platforms. "mac", "mac-aarch64", "linux", "win"
-val kotlinversion = "1.8.22"
-val javaVersion = 19
-println("Current Java version: ${JavaVersion.current()}")
-if (JavaVersion.current().majorVersion.toInt() != javaVersion) throw GradleException("Use Java $javaVersion")
+val kotlinversion = "1.9.22"
+val needMajorJavaVersion = 21
+val javaVersion = System.getProperty("java.version")!!
+println("Current Java version: $javaVersion")
+if (JavaVersion.current().majorVersion.toInt() != needMajorJavaVersion) throw GradleException("Use Java $needMajorJavaVersion")
 
 plugins {
-    kotlin("jvm") version "1.8.22"
+    kotlin("jvm") version "1.9.22"
+    id("idea")
     application
     id("com.github.ben-manes.versions") version "0.47.0"
     id("org.beryx.runtime") version "1.13.0"
 }
 
+idea {
+    module {
+        isDownloadJavadoc = true
+        isDownloadSources = true
+    }
+}
+
 kotlin {
-    jvmToolchain(javaVersion)
+    jvmToolchain(needMajorJavaVersion)
 }
 
 repositories {
@@ -38,8 +47,8 @@ dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
     implementation("io.github.microutils:kotlin-logging:3.0.5")
-    implementation("org.slf4j:slf4j-simple:2.0.7") // no colors, everything stderr
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.aarch64:3.124.0") {
+    implementation("org.slf4j:slf4j-simple:2.0.11") // no colors, everything stderr
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.aarch64:3.124.200") {
         isTransitive = false
     }
 }
@@ -67,7 +76,7 @@ runtime {
                 println("downloading jdks to or using jdk from $ddir, delete folder to update jdk!")
                 @Suppress("INACCESSIBLE_TYPE")
                 setJdkHome(
-                    jdkDownload("https://api.adoptium.net/v3/binary/latest/$javaVersion/ga/$platf/x64/jdk/hotspot/normal/eclipse?project=jdk",
+                    jdkDownload("https://api.adoptium.net/v3/binary/latest/$needMajorJavaVersion/ga/$platf/x64/jdk/hotspot/normal/eclipse?project=jdk",
                         closureOf<org.beryx.runtime.util.JdkUtil.JdkDownloadOptions> {
                             downloadDir = ddir // put jdks here so different projects can use them!
                             archiveExtension = if (platf == "windows") "zip" else "tar.gz"
@@ -184,7 +193,7 @@ tasks.withType(CreateStartScripts::class).forEach {script ->
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "$javaVersion"
+    kotlinOptions.jvmTarget = "$needMajorJavaVersion"
     kotlinOptions.freeCompilerArgs = listOf("-Xjsr305=warn")
 }
 
