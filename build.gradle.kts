@@ -1,22 +1,23 @@
 import org.gradle.kotlin.dsl.support.zipTo
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.util.*
 
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
 val cPlatforms = listOf("mac-aarch64") // compile for these platforms. "mac", "mac-aarch64", "linux", "win"
-val kotlinversion = "1.9.22"
+val kotlinversion = "2.1.0"
 val needMajorJavaVersion = 21
 val javaVersion = System.getProperty("java.version")!!
 println("Current Java version: $javaVersion")
 if (JavaVersion.current().majorVersion.toInt() != needMajorJavaVersion) throw GradleException("Use Java $needMajorJavaVersion")
 
 plugins {
-    kotlin("jvm") version "1.9.22"
+    kotlin("jvm") version "2.1.0"
     id("idea")
     application
-    id("com.github.ben-manes.versions") version "0.47.0"
-    id("org.beryx.runtime") version "1.13.0"
+    id("com.github.ben-manes.versions") version "0.51.0"
+    id("org.beryx.runtime") version "1.13.1"
 }
 
 idea {
@@ -47,8 +48,8 @@ dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
     implementation("io.github.microutils:kotlin-logging:3.0.5")
-    implementation("org.slf4j:slf4j-simple:2.0.11") // no colors, everything stderr
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.aarch64:3.124.200") {
+    implementation("org.slf4j:slf4j-simple:2.0.16") // no colors, everything stderr
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.aarch64:3.128.0") {
         isTransitive = false
     }
 }
@@ -95,14 +96,14 @@ open class CrossPackage : DefaultTask() {
 
     @TaskAction
     fun crossPackage() {
-        File("${project.buildDir.path}/crosspackage/").mkdirs()
+        File("${project.layout.buildDirectory.get().asFile.path}/crosspackage/").mkdirs()
         project.runtime.targetPlatforms.get().forEach { (t, _) ->
             println("targetplatform: $t")
             val imgdir = "${project.runtime.imageDir.get()}/${project.name}-$t"
             println("imagedir=$imgdir targetplatform=$t")
             when {
                 t.startsWith("mac") -> {
-                    val appp = File(project.buildDir.path + "/crosspackage/$t/$execfilename.app").path
+                    val appp = File(project.layout.buildDirectory.get().asFile.path + "/crosspackage/$t/$execfilename.app").path
                     project.delete(appp)
                     project.copy {
                         into(appp)
@@ -160,7 +161,8 @@ open class CrossPackage : DefaultTask() {
                     // touch folder to update Finder
                     File(appp).setLastModified(System.currentTimeMillis())
                     // zip it
-                    zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-$t.zip"), File("${project.buildDir.path}/crosspackage/$t"))
+                    zipTo(File("${project.layout.buildDirectory.get().asFile.path}/crosspackage/$execfilename-$t.zip"),
+                        File("${project.layout.buildDirectory.get().asFile.path}/crosspackage/$t"))
                 }
                 t == "win" -> {
                     File("$imgdir/bin/$execfilename.bat").delete() // from runtime, not nice
@@ -170,10 +172,10 @@ open class CrossPackage : DefaultTask() {
                         set DIR=%~dp0
                         start "" "%DIR%\bin\javaw" %JLINK_VM_OPTIONS% -classpath "%DIR%/lib/*" ${project.application.mainClass.get()} 
                     """.trimIndent())
-                    zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-$t.zip"), File(imgdir))
+                    zipTo(File("${project.layout.buildDirectory.get().asFile.path}/crosspackage/$execfilename-$t.zip"), File(imgdir))
                 }
                 t.startsWith("linux") -> {
-                    zipTo(File("${project.buildDir.path}/crosspackage/$execfilename-$t.zip"), File(imgdir))
+                    zipTo(File("${project.layout.buildDirectory.get().asFile.path}/crosspackage/$execfilename-$t.zip"), File(imgdir))
                 }
             }
         }
@@ -193,15 +195,15 @@ tasks.withType(CreateStartScripts::class).forEach {script ->
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "$needMajorJavaVersion"
-    kotlinOptions.freeCompilerArgs = listOf("-Xjsr305=warn")
+    compilerOptions.jvmTarget.set(JvmTarget.fromTarget("$needMajorJavaVersion"))
+    compilerOptions.freeCompilerArgs.set(listOf("-Xjsr305=warn"))
 }
 
 task("dist") {
     dependsOn("crosspackage")
     doLast {
         println("Deleting build/[image,jre,install]")
-        project.delete(project.runtime.imageDir.get(), project.runtime.jreDir.get(), "${project.buildDir.path}/install")
+        project.delete(project.runtime.imageDir.get(), project.runtime.jreDir.get(), "${project.layout.buildDirectory.get().asFile.path}/install")
         println("Created zips in build/crosspackage")
     }
 }

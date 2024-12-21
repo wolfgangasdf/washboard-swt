@@ -9,7 +9,7 @@ import org.eclipse.swt.widgets.Listener
 import org.eclipse.swt.widgets.Shell
 import java.io.File
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 
 private val logger = KotlinLogging.logger {}
 
@@ -28,7 +28,7 @@ class BrowserShell(private val w: Widget) {
 
     fun loadWebviewContent() {
         loadedcontent = false
-        @Suppress("UNUSED_VARIABLE") val bfun = BrowserLogFunction(w, browser, "logit")
+        @Suppress("unused", "UnusedVariable") val bfun = BrowserLogFunction(w, browser, "logit")
         // redirect all console and errors to logit browserfunction bfun!
         browser.execute("var console = {};console.log = logit;console.info = logit;console.warn = logit;console.error = logit;window.console=console;")
         browser.execute("window.onerror = function (msg, url, lineNo, columnNo, error) {logit(msg+\":\"+url+\":\"+lineNo+\":\"+error);return false;}")
@@ -36,7 +36,7 @@ class BrowserShell(private val w: Widget) {
             WidgetType.WEB -> {
                 // test connection to avoid hangs
                 try {
-                    val urlConnect = URL(w.url).openConnection() as HttpURLConnection
+                    val urlConnect = URI.create(w.url).toURL().openConnection() as HttpURLConnection
                     urlConnect.connect()
                     urlConnect.disconnect()
                     browser.url = w.url

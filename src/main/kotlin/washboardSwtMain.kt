@@ -18,7 +18,6 @@ import java.net.SocketException
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
-import javax.swing.KeyStroke
 import kotlin.concurrent.fixedRateTimer
 import kotlin.concurrent.schedule
 import kotlin.concurrent.thread
@@ -62,18 +61,17 @@ object WashboardApp {
 
     private fun showApp() {
         NSApplication.sharedApplication().activateIgnoringOtherApps(true)
+        NSApplication.sharedApplication().arrangeInFront(null)
         Timer().schedule(100) { // ugly workaround that not all windows are always on top
             display.syncExec { NSApplication.sharedApplication().activateIgnoringOtherApps(true) }
         }
         val now = System.currentTimeMillis()
         Settings.widgets.forEach { w ->
-            w.bs?.shell?.setActive() // only needed when revealed via socket
             if (now - w.lastupdatems > w.updateIntervalMins * 60 * 1000) {
                 logger.info("reloading widget $w")
                 w.bs!!.loadWebviewContent()
             }
         }
-        lastActiveWidget?.bs?.shell?.setActive() // only needed when revealed via socket
         startFocusTimer()
         appShown = true
     }
@@ -144,10 +142,10 @@ object WashboardApp {
         wMenuItem(menu, "Quit") { quitApp() }
         MenuItem(menu, SWT.SEPARATOR)
         wMenuItem(menu, "Refresh widget") {
-            Settings.widgets.find { it.bs!!.browser.isFocusControl }?.also { it.bs!!.loadWebviewContent() }
+            Settings.widgets.find { it == lastActiveWidget }?.also { it.bs!!.loadWebviewContent() }
         }
         wMenuItem(menu, "Edit widget") {
-            Settings.widgets.find { it.bs!!.browser.isFocusControl }?.also { ShellEditWidget(it, false) }
+            Settings.widgets.find { it == lastActiveWidget }?.also { ShellEditWidget(it, false) }
         }
         wMenuItem(menu, "Add web widget") { ShellEditWidget(Widget(WidgetType.WEB), true) }
         wMenuItem(menu, "Add local widget") { ShellEditWidget(Widget(WidgetType.LOCAL), true) }

@@ -53,7 +53,7 @@ class ShellEditWidget(w: Widget, isnew: Boolean) {
             w.enableClicks = bclic.selection
             w.bs?.loadWebviewContent()
             if (isnew) {
-                WashboardApp.showWidget(w, isnew)
+                WashboardApp.showWidget(w, addToSettings = true)
             }
             Settings.saveSettings()
             shell.close()

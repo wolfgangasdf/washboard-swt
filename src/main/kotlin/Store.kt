@@ -39,7 +39,7 @@ enum class WidgetType(val i: Int) {
     WEB(0),
     LOCAL(1);
     companion object {
-        fun fromInt(v: Int) = values().first { it.i == v }
+        fun fromInt(v: Int) = entries.first { it.i == v }
     }
 }
 
