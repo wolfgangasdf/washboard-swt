@@ -6,17 +6,17 @@ import java.util.*
 group = "com.wolle.washboard-swt"
 version = "1.0-SNAPSHOT"
 val cPlatforms = listOf("mac-aarch64") // compile for these platforms. "mac", "mac-aarch64", "linux", "win"
-val kotlinversion = "2.1.0"
+val kotlinversion = "2.1.21"
 val needMajorJavaVersion = 21
 val javaVersion = System.getProperty("java.version")!!
 println("Current Java version: $javaVersion")
 if (JavaVersion.current().majorVersion.toInt() != needMajorJavaVersion) throw GradleException("Use Java $needMajorJavaVersion")
 
 plugins {
-    kotlin("jvm") version "2.1.0"
+    kotlin("jvm") version "2.1.21"
     id("idea")
     application
-    id("com.github.ben-manes.versions") version "0.51.0"
+    id("com.github.ben-manes.versions") version "0.52.0"
     id("org.beryx.runtime") version "1.13.1"
 }
 
@@ -48,8 +48,8 @@ dependencies {
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinversion")
     implementation("io.github.microutils:kotlin-logging:3.0.5")
-    implementation("org.slf4j:slf4j-simple:2.0.16") // no colors, everything stderr
-    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.aarch64:3.128.0") {
+    implementation("org.slf4j:slf4j-simple:2.0.17") // no colors, everything stderr
+    implementation("org.eclipse.platform:org.eclipse.swt.cocoa.macosx.aarch64:3.130.0") {
         isTransitive = false
     }
 }

@@ -2,8 +2,8 @@ import mu.KotlinLogging
 import org.eclipse.swt.SWT
 import org.eclipse.swt.browser.*
 import org.eclipse.swt.events.*
-import org.eclipse.swt.graphics.Point
 import org.eclipse.swt.layout.FillLayout
+import org.eclipse.swt.widgets.Display
 import org.eclipse.swt.widgets.Event
 import org.eclipse.swt.widgets.Listener
 import org.eclipse.swt.widgets.Shell
@@ -27,37 +27,40 @@ class BrowserShell(private val w: Widget) {
     private var loadedcontent = false
 
     fun loadWebviewContent() {
-        loadedcontent = false
-        @Suppress("unused", "UnusedVariable") val bfun = BrowserLogFunction(w, browser, "logit")
-        // redirect all console and errors to logit browserfunction bfun!
-        browser.execute("var console = {};console.log = logit;console.info = logit;console.warn = logit;console.error = logit;window.console=console;")
-        browser.execute("window.onerror = function (msg, url, lineNo, columnNo, error) {logit(msg+\":\"+url+\":\"+lineNo+\":\"+error);return false;}")
-        when(w.type) {
-            WidgetType.WEB -> {
-                // test connection to avoid hangs
-                try {
-                    val urlConnect = URI.create(w.url).toURL().openConnection() as HttpURLConnection
-                    urlConnect.connect()
-                    urlConnect.disconnect()
-                    browser.url = w.url
-                    w.lastupdatems = System.currentTimeMillis()
-                } catch (e: Exception) {
-                    logger.error("loadwvc $w test connection: exception $e")
+        Display.getDefault().asyncExec { // TODO attempt to prevent hanging of app if website down
+            loadedcontent = false
+            @Suppress("unused", "UnusedVariable") val bfun = BrowserLogFunction(w, browser, "logit")
+            // redirect all console and errors to logit browserfunction bfun!
+            browser.execute("var console = {};console.log = logit;console.info = logit;console.warn = logit;console.error = logit;window.console=console;")
+            browser.execute("window.onerror = function (msg, url, lineNo, columnNo, error) {logit(msg+\":\"+url+\":\"+lineNo+\":\"+error);return false;}")
+            when (w.type) {
+                WidgetType.WEB -> {
+                    // test connection to avoid hangs
+                    try {
+                        val urlConnect = URI.create(w.url).toURL().openConnection() as HttpURLConnection
+                        urlConnect.connect()
+                        urlConnect.disconnect()
+                        browser.url = w.url
+                        w.lastupdatems = System.currentTimeMillis()
+                    } catch (e: Exception) {
+                        logger.error("loadwvc $w test connection: exception $e")
+                    }
                 }
-            }
-            WidgetType.LOCAL -> {
-                val f = File("${AppSettings.getLocalWidgetPath()}/${w.url}/index.html")
-                logger.debug("[$w] url: ${f.toURI()}")
-                browser.url = f.toURI().toString()
-                w.lastupdatems = System.currentTimeMillis()
+
+                WidgetType.LOCAL -> {
+                    val f = File("${AppSettings.getLocalWidgetPath()}/${w.url}/index.html")
+                    logger.debug("[$w] url: ${f.toURI()}")
+                    browser.url = f.toURI().toString()
+                    w.lastupdatems = System.currentTimeMillis()
+                }
             }
         }
     }
 
     init {
         shell.layout = FillLayout()
-        shell.location = Point(w.x, w.y)
-        shell.size = Point(w.wx, w.wy)
+        shell.location = KPoint.instance(w.x, w.y)
+        shell.size = KPoint.instance(w.wx, w.wy)
         shell.text = "$w"
         @Suppress("ObjectLiteralToLambda") // lambda doesn't work here
         shell.addListener(SWT.Close, object: Listener { override fun handleEvent(event: Event) {
